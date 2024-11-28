@@ -24,9 +24,8 @@ fn main() {
 }
 
 fn parser() -> io::Result<()> {
-    // for now, try to read everything and where things are
     let file = File::open("correct.xml")?;
-    let file = BufReader::new(file); // Buffering is important for performance
+    let file = BufReader::new(file);
 
     let parser = EventReader::new(file);
     let mut is_trace: bool = false;
@@ -138,12 +137,6 @@ fn parser() -> io::Result<()> {
             Ok(rXmlEvent::Characters(string_out)) => {
                 // we have to verify we are inside a trace
                 if is_trace {
-                    // we have to separate the contents here
-                    // this is most likely a regex to apply here or a tokeniser
-                    // What we have to have
-                    // - number of channels
-                    // - types for each channels
-                    // Either int or float
                     let ch_type_vec: Vec<ChannelType> = vec![
                         ChannelType::Integer,
                         ChannelType::Integer,
@@ -151,7 +144,6 @@ fn parser() -> io::Result<()> {
                         ChannelType::Decimal,
                         ChannelType::Double,
                     ];
-
                     let mut trace_data = TraceData::from_channel_types(ch_type_vec);
                     match trace_data.parse_raw_data(string_out) {
                         Ok(()) => {}

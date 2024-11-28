@@ -61,7 +61,7 @@ impl ChannelType {
         match self {
             ChannelType::Integer => ChannelDataEl::Integer(0),
             ChannelType::Decimal => ChannelDataEl::Double(0.0),
-            ChannelType::Bool => ChannelDataEl::Bool(false),
+            ChannelType::Bool => ChannelDataEl::Double(0.0), //kinda incorrect but should be unused anyway. Maybe an optional makes more sense ?
             ChannelType::Double => ChannelDataEl::Double(0.0),
         }
     }

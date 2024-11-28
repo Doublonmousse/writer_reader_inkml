@@ -18,7 +18,6 @@ enum ChannelData {
 #[derive(Debug, Clone)]
 pub enum ChannelDataEl {
     Integer(i64),
-    Bool(bool),
     Double(f64),
 }
 
@@ -44,7 +43,6 @@ impl ChannelData {
 
 pub struct TraceData {
     data: Vec<ChannelData>,
-    types: Vec<ChannelType>,
     last_value_modifiers: Vec<ValueModifier>,
     last_value_difference: Vec<ChannelDataEl>,
     /// the index of the channel we are currently parsing the data for
@@ -67,7 +65,6 @@ impl TraceData {
                 .into_iter()
                 .map(|x| ChannelData::map_from_channel_type(x))
                 .collect(),
-            types: types.clone(),
             last_value_difference: types.into_iter().map(|x| x.get_null_value()).collect(),
             last_value_modifiers: (1..=num_channels)
                 .into_iter()
