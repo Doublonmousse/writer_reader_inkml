@@ -150,6 +150,12 @@ impl TraceData {
                                     self.value_str.push(next_char);
                                 }
                             }
+                            'T' | 'F' => {
+                                // for boolean traces
+                                self.is_value_found = true;
+                                self.value_str.push(next_char);
+                                self.push_found_value().unwrap();
+                            }
                             _ => return Err(()),
                         }
                     }
@@ -243,7 +249,71 @@ impl TraceData {
                     }
                 }
             }
-            _ => {}
+            ChannelData::Double(current) => {
+                let parsed_value: Result<f64, std::num::ParseFloatError> =
+                    self.value_str.parse::<f64>();
+                println!(
+                    "parsed value : {:?} value str {:?}",
+                    parsed_value, self.value_str
+                );
+                match parsed_value {
+                    Ok(value) => match self.new_modifier {
+                        ValueModifier::Explicit => {
+                            current.push(value);
+                        }
+                        ValueModifier::SingleDifference => {
+                            let previous = current.last().ok_or_else(|| ())?;
+                            let last_difference_container =
+                                self.last_value_difference[self.index_channel].clone();
+                            match last_difference_container {
+                                ChannelDataEl::Double(last_difference) => {
+                                    self.last_value_difference[self.index_channel] =
+                                        ChannelDataEl::Double(last_difference + value);
+                                    current.push(value + previous);
+                                }
+                                _ => return Err(()),
+                            }
+                        }
+                        ValueModifier::DoubleDifference => {
+                            let previous = current.last().ok_or_else(|| ())?;
+                            let last_difference_container =
+                                self.last_value_difference[self.index_channel].clone();
+                            match last_difference_container {
+                                ChannelDataEl::Double(last_difference) => {
+                                    self.last_value_difference[self.index_channel] =
+                                        ChannelDataEl::Double(last_difference + value);
+                                    current.push(value + previous + last_difference);
+                                }
+                                _ => return Err(()),
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        return Err(());
+                    }
+                }
+            }
+            ChannelData::Bool(current) => {
+                println!("value : {:?}", self.value_str);
+                let parsed_value = match self.value_str.as_str() {
+                    "T" => Ok(true),
+                    "F" => Ok(false),
+                    _ => Err(()),
+                };
+                println!(
+                    "parsed value : {:?} value str {:?}",
+                    parsed_value, self.value_str
+                );
+                // boolean : will be true or false, not changing anything there
+                // so effectively the corresponding index in the last_value_difference
+                // element is unused
+                match parsed_value {
+                    Ok(bool_value) => {
+                        current.push(bool_value);
+                    }
+                    Err(_) => return Err(()),
+                }
+            }
         }
 
         self.last_value_modifiers[self.index_channel] = self.new_modifier;
