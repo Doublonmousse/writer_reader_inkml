@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use std::io;
 use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
 use crate::brushes::BrushCollection;
-use crate::context::{ChannelType, Context};
+use crate::context::{Channel, ChannelType, Context};
 use crate::trace_data::TraceData;
 use crate::xml_helpers::{get_id, get_ids};
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 struct ParserContext {
     /// keeps trace of whether we are inside of a trace element
     is_trace: bool,
@@ -21,7 +20,7 @@ struct ParserContext {
     brushes: BrushCollection,
 }
 
-pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
+pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
     let parser = EventReader::new(buf_file);
     let mut parser_context = ParserContext::default();
 
@@ -39,9 +38,10 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
 
                         // create the empty context
                         if !parser_context.context.contains_key(&id_context) {
-                            parser_context
-                                .context
-                                .insert(id_context.clone(), Context::create_empty(id_context.clone()));
+                            parser_context.context.insert(
+                                id_context.clone(),
+                                Context::create_empty(id_context.clone()),
+                            );
                             parser_context.current_context_id = Some(id_context);
                         }
                     }
@@ -76,6 +76,17 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                         );
                         // add the channels to the CURRENT context
                         println!("{:?}", ids);
+                        match parser_context.current_context_id {
+                            Some(ref current_context) => {
+                                parser_context
+                                    .context
+                                    .get_mut(current_context)
+                                    .ok_or(())?
+                                    .channel_list
+                                    .push(Channel::initialise_channel_from_name(ids)?);
+                            }
+                            _ => {}
+                        }
                     }
                     "channelProperties" => {
                         println!("start of channel properties");
@@ -141,6 +152,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                 }
                 "channelProperties" => {
                     println!("\x1b[93mclosing channelProperties\x1b[0m");
+                    println!("now the context is {:?}", parser_context.context);
                 }
                 "trace" => {
                     println!("\x1b[93mclosing trace\x1b[0m");
@@ -164,20 +176,13 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                     let mut trace_data = TraceData::from_channel_types(ch_type_vec);
                     match trace_data.parse_raw_data(string_out) {
                         Ok(()) => {}
-                        Err(()) => {
-                            eprintln!("Error: ");
-                            break;
-                        }
+                        Err(()) => return Err(()),
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("Error: {e}");
-                break;
-            }
+            Err(_) => return Err(()),
             _ => {}
         }
     }
-
     Ok(())
 }

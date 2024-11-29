@@ -17,6 +17,26 @@ pub(crate) enum ChannelKind {
     Y,
     /// F : force/pressure
     F,
+    /// TODO
+    OA,
+    /// TODO
+    OE,
+}
+
+impl ChannelKind {
+    fn parse(name: &Option<String>) -> Result<ChannelKind, ()> {
+        match name {
+            Some(value) => match value.as_str() {
+                "X" => Ok(ChannelKind::X),
+                "Y" => Ok(ChannelKind::Y),
+                "F" => Ok(ChannelKind::F),
+                "OA" => Ok(ChannelKind::OA),
+                "OE" => Ok(ChannelKind::OE),
+                _ => Err(()),
+            },
+            None => Err(()),
+        }
+    }
 }
 
 impl From<ChannelKind> for String {
@@ -25,18 +45,35 @@ impl From<ChannelKind> for String {
             ChannelKind::X => String::from("X"),
             ChannelKind::Y => String::from("Y"),
             ChannelKind::F => String::from("F"),
+            ChannelKind::OA => String::from("OA"),
+            ChannelKind::OE => String::from("OF"),
         }
     }
 }
 
 /// type used for the encoding
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub(crate) enum ChannelType {
     Integer,
     Decimal,
     Double,
     Bool,
+}
+
+impl ChannelType {
+    fn parse(name: &Option<String>) -> Result<ChannelType, ()> {
+        match name {
+            Some(value) => match value.as_str() {
+                "integer" => Ok(ChannelType::Integer),
+                "decimal" => Ok(ChannelType::Decimal),
+                "double" => Ok(ChannelType::Double),
+                "boolean" => Ok(ChannelType::Bool),
+                _ => Err(()),
+            },
+            None => Err(()),
+        }
+    }
 }
 
 impl Default for ChannelType {
@@ -61,7 +98,7 @@ impl ChannelType {
         match self {
             ChannelType::Integer => ChannelDataEl::Integer(0),
             ChannelType::Decimal => ChannelDataEl::Double(0.0),
-            ChannelType::Bool => ChannelDataEl::Double(0.0), //kinda incorrect but should be unused anyway. Maybe an optional makes more sense ?
+            ChannelType::Bool => ChannelDataEl::Bool,
             ChannelType::Double => ChannelDataEl::Double(0.0),
         }
     }
@@ -125,6 +162,31 @@ pub struct Channel {
     resolution_value: u32,
     inverse_unit_resolution: InverseResolutionUnits,
     unit_channel: ChannelUnit,
+}
+
+impl Channel {
+    
+    pub fn initialise_channel_from_name(
+        kind_type_unit_v: Vec<Option<String>>,
+    ) -> Result<Channel, ()> {
+        let kind = &kind_type_unit_v[0];
+        let channel_type = &kind_type_unit_v[1];
+        // TODO : parse unit
+        //let unit = &kind_type_unit_v[2];
+
+        let channel_kind = ChannelKind::parse(&kind)?;
+
+        Ok(Channel {
+            kind: channel_kind,
+            types: ChannelType::parse(&channel_type)?,
+            // the rest is there as a default value
+            // TODO : choose default resolution and unit 
+            // based on the channel kind (deg for OA, etc...)
+            resolution_value: 1000,
+            inverse_unit_resolution: InverseResolutionUnits::OneOverCm,
+            unit_channel: ChannelUnit::cm,
+        })
+    }
 }
 
 #[derive(Debug)]

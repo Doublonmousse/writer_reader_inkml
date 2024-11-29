@@ -15,10 +15,13 @@ enum ChannelData {
 }
 
 /// polymorhpic enum to hold the data from a point of the trace
+/// Only used for holding the last element or difference (in order to calculate
+/// 'x or "y)
 #[derive(Debug, Clone)]
 pub enum ChannelDataEl {
     Integer(i64),
     Double(f64),
+    Bool,
 }
 
 /// Type of modifier
