@@ -1,4 +1,6 @@
+#[cfg(feature = "clipboard")]
 use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
+
 use std::fs::File;
 use std::io::BufReader;
 use std::{f32::consts::PI, io};
@@ -102,10 +104,13 @@ fn writer() -> io::Result<()> {
     println!("Hello, {:?}", String::from_utf8(out_v.clone()));
 
     // copy to clipboard
-    let mimetype = String::from("InkML Format");
-    let content: Vec<ClipboardContent> = vec![ClipboardContent::Other(mimetype, out_v.to_owned())];
-    let ctx = ClipboardContext::new().unwrap();
-    let _ = ctx.set(content);
-
+    #[cfg(feature = "clipboard")]
+    {
+        let mimetype = String::from("InkML Format");
+        let content: Vec<ClipboardContent> =
+            vec![ClipboardContent::Other(mimetype, out_v.to_owned())];
+        let ctx = ClipboardContext::new().unwrap();
+        let _ = ctx.set(content);
+    }
     Ok(())
 }

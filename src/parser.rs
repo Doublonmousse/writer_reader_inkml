@@ -17,6 +17,7 @@ struct ParserContext {
     /// We suppose that there is always a context, even if this is only
     /// a `traceFormat` tag (in that case there would be only one context !)
     context: HashMap<String, Context>,
+    current_context_id: Option<String>,
     brushes: BrushCollection,
 }
 
@@ -40,7 +41,8 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                         if !parser_context.context.contains_key(&id_context) {
                             parser_context
                                 .context
-                                .insert(id_context.clone(), Context::create_empty(id_context));
+                                .insert(id_context.clone(), Context::create_empty(id_context.clone()));
+                            parser_context.current_context_id = Some(id_context);
                         }
                     }
                     "inkSource" => {
@@ -58,6 +60,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                                 String::from("ctx0"),
                                 Context::create_empty(String::from("ctx0")),
                             );
+                            parser_context.current_context_id = Some(String::from("ctx0"));
                         }
 
                         println!("here is the current context: {:?}", parser_context.context);
@@ -68,10 +71,10 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                             vec![
                                 String::from("name"),
                                 String::from("type"),
-                                String::from("units"),
+                                String::from("units"), // can be optional
                             ],
                         );
-                        // add the channels to the current context
+                        // add the channels to the CURRENT context
                         println!("{:?}", ids);
                     }
                     "channelProperties" => {
@@ -127,6 +130,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                     println!("\x1b[93mclosing definitions\x1b[0m");
                 }
                 "context" => {
+                    parser_context.current_context_id = None;
                     println!("\x1b[93mclosing context\x1b[0m");
                 }
                 "inkSource" => {
