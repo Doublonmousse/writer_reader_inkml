@@ -8,7 +8,7 @@ use xml::writer::{Error, EventWriter, XmlEvent};
 
 /// types of channel
 /// For now we allow X,Y only
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 #[allow(unused)]
 pub(crate) enum ChannelKind {
     /// X coordinates, left to right
@@ -30,7 +30,7 @@ impl From<ChannelKind> for String {
 }
 
 /// type used for the encoding
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 #[allow(unused)]
 pub(crate) enum ChannelType {
     Integer,
@@ -67,7 +67,7 @@ impl ChannelType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 enum InverseResolutionUnits {
     // 1/cm
@@ -91,7 +91,7 @@ impl Default for InverseResolutionUnits {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused, non_camel_case_types)]
 enum ChannelUnit {
     mm,
@@ -117,8 +117,8 @@ impl From<ChannelUnit> for String {
     }
 }
 
-#[derive(Clone)]
-struct Channel {
+#[derive(Clone, Debug)]
+pub struct Channel {
     kind: ChannelKind,
     types: ChannelType,
     // we are forcing this to u32 for now
@@ -127,11 +127,12 @@ struct Channel {
     unit_channel: ChannelUnit,
 }
 
+#[derive(Debug)]
 pub(crate) struct Context {
     // name given to the context, name = ctx0 by default
     // refered by `contextRef="#ctx0" in the trace attr
-    name: String,
-    channel_list: Vec<Channel>,
+    pub name: String,
+    pub channel_list: Vec<Channel>,
 }
 
 impl Default for Context {
@@ -159,6 +160,13 @@ impl Default for Context {
 }
 
 impl Context {
+    pub fn create_empty(name: String) -> Context {
+        Context {
+            name: name,
+            channel_list: vec![],
+        }
+    }
+
     pub fn pressure_channel_exist(&self) -> bool {
         self.channel_list
             .clone()

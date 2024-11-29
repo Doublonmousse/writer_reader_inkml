@@ -2,6 +2,7 @@ use crate::context::Context;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
 
+#[derive(Debug)]
 pub(crate) struct Brush {
     /// name for the brush
     /// <brush xml:id="name">
@@ -21,9 +22,10 @@ pub(crate) struct Brush {
 /// This means we have to create a mapping from a list of strokes to brushes
 /// and create a growing collection of brush so that no one brush is repeated
 /// twice
-/// 
-/// For now this isn't very useful. Depending on what we add to this structure 
+///
+/// For now this isn't very useful. Depending on what we add to this structure
 /// we may have some more efficient ways to make sure a brush doesn't already exist
+#[derive(Default, Debug)]
 pub(crate) struct BrushCollection {
     brushes: Vec<Brush>,
 }

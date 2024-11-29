@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
@@ -7,19 +8,21 @@ use crate::context::{ChannelType, Context};
 use crate::trace_data::TraceData;
 use crate::xml_helpers::{get_id, get_ids};
 
-struct Parser {
+#[derive(Default,Debug)]
+struct ParserContext {
     /// keeps trace of whether we are inside of a trace element
-    is_trace:bool,
-    /// stores the context of the inkml file.
-    /// We suppose that there is only one context here !
-    context: Context, 
+    is_trace: bool,
+    /// stores the context(s) of the inkml file.
+    /// Using a conditional to mark whether we encountered a context
+    /// We suppose that there is always a context, even if this is only
+    /// a `traceFormat` tag (in that case there would be only one context !)
+    context: HashMap<String, Context>,
     brushes: BrushCollection,
 }
 
-
 pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
     let parser = EventReader::new(buf_file);
-    let mut is_trace: bool = false;
+    let mut parser_context = ParserContext::default();
 
     for xml_event in parser {
         match xml_event {
@@ -29,17 +32,35 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                 // we should dispatch on some local names
                 match name.local_name.as_str() {
                     "context" => {
-                        let id_context = get_id(attributes, String::from("id"));
+                        let id_context =
+                            get_id(attributes, String::from("id")).unwrap_or(String::from("ctx0"));
                         println!("context id :{:?}", id_context);
+
+                        // create the empty context
+                        if !parser_context.context.contains_key(&id_context) {
+                            parser_context
+                                .context
+                                .insert(id_context.clone(), Context::create_empty(id_context));
+                        }
                     }
                     "inkSource" => {
                         let id_source = get_id(attributes, String::from("id"));
                         println!("source id :{:?}", id_source);
                         // useful to start/end the parsing of a source (full context !)
+                        // though there are cases where only the trace format can exist
                     }
                     "traceFormat" => {
                         println!("start of traceFormat");
                         // if we have no inkSource, this should init our context as well with a default inkSource id here
+                        if parser_context.context.is_empty() {
+                            // create a new context with a default name
+                            parser_context.context.insert(
+                                String::from("ctx0"),
+                                Context::create_empty(String::from("ctx0")),
+                            );
+                        }
+
+                        println!("here is the current context: {:?}", parser_context.context);
                     }
                     "channel" => {
                         let ids = get_ids(
@@ -50,6 +71,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                                 String::from("units"),
                             ],
                         );
+                        // add the channels to the current context
                         println!("{:?}", ids);
                     }
                     "channelProperties" => {
@@ -85,7 +107,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                     }
                     "trace" => {
                         println!("start of trace");
-                        is_trace = true;
+                        parser_context.is_trace = true;
                         // need to assign a context and a brush
                         // this will give the information on the type (int or float) of each channel
                         // and their number
@@ -118,7 +140,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
                 }
                 "trace" => {
                     println!("\x1b[93mclosing trace\x1b[0m");
-                    is_trace = false;
+                    parser_context.is_trace = false;
                 }
                 "brush" => {
                     println!("\x1b[93mclosing brush\x1b[0m");
@@ -127,7 +149,7 @@ pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
             },
             Ok(rXmlEvent::Characters(string_out)) => {
                 // we have to verify we are inside a trace
-                if is_trace {
+                if parser_context.is_trace {
                     let ch_type_vec: Vec<ChannelType> = vec![
                         ChannelType::Integer,
                         ChannelType::Integer,
