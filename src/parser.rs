@@ -2,16 +2,27 @@ use std::io;
 use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
-use crate::context::ChannelType;
+use crate::brushes::BrushCollection;
+use crate::context::{ChannelType, Context};
 use crate::trace_data::TraceData;
 use crate::xml_helpers::{get_id, get_ids};
+
+struct Parser {
+    /// keeps trace of whether we are inside of a trace element
+    is_trace:bool,
+    /// stores the context of the inkml file.
+    /// We suppose that there is only one context here !
+    context: Context, 
+    brushes: BrushCollection,
+}
+
 
 pub fn parser<T: Read>(buf_file: T) -> io::Result<()> {
     let parser = EventReader::new(buf_file);
     let mut is_trace: bool = false;
 
-    for e in parser {
-        match e {
+    for xml_event in parser {
+        match xml_event {
             Ok(rXmlEvent::StartElement {
                 name, attributes, ..
             }) => {
