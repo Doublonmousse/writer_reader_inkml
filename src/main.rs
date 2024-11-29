@@ -1,6 +1,6 @@
 use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::{f32::consts::PI, io};
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 use xml::writer::{EmitterConfig, XmlEvent};
@@ -17,17 +17,17 @@ use xml_helpers::{get_id, get_ids};
 
 fn main() {
     //parser stage
-    parser().unwrap();
+    let file = File::open("correct.xml").unwrap();
+    let buf_file = BufReader::new(file);
+    parser(buf_file).unwrap();
 
     // writer stage
     writer().unwrap();
 }
 
-fn parser() -> io::Result<()> {
-    let file = File::open("correct.xml")?;
-    let file = BufReader::new(file);
+fn parser<T:Read>(buf_file:T) -> io::Result<()> {
 
-    let parser = EventReader::new(file);
+    let parser = EventReader::new(buf_file);
     let mut is_trace: bool = false;
 
     for e in parser {
