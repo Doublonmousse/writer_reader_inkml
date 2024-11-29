@@ -2,24 +2,24 @@ use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
 use std::fs::File;
 use std::io::BufReader;
 use std::{f32::consts::PI, io};
-use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 use xml::writer::{EmitterConfig, XmlEvent};
 
 mod brushes;
 mod context;
 mod trace_data;
+mod xml_helpers;
 
 use brushes::Brush;
 use context::{ChannelType, Context};
 use trace_data::TraceData;
+use xml_helpers::{get_id, get_ids};
 
 fn main() {
-    //writer part
-    //writer().unwrap();
-
     //parser stage
     parser().unwrap();
+
+    // writer stage
     writer().unwrap();
 }
 
@@ -158,35 +158,11 @@ fn parser() -> io::Result<()> {
                 eprintln!("Error: {e}");
                 break;
             }
-            // There's more: https://docs.rs/xml-rs/latest/xml/reader/enum.XmlEvent.html
             _ => {}
         }
     }
 
     Ok(())
-}
-
-fn get_id(attributes: Vec<OwnedAttribute>, match_string: String) -> Option<String> {
-    attributes
-        .into_iter()
-        .filter(|x| x.name.local_name == match_string)
-        .map(|x| x.value)
-        .next()
-}
-
-/// gets the attributes we asked for in that order
-fn get_ids(attributes: Vec<OwnedAttribute>, match_string: Vec<String>) -> Vec<Option<String>> {
-    match_string
-        .into_iter()
-        .map(|x| {
-            attributes
-                .clone()
-                .into_iter()
-                .filter(|attr| x == attr.name.local_name)
-                .map(|x| x.value.clone())
-                .next()
-        })
-        .collect()
 }
 
 fn writer() -> io::Result<()> {
