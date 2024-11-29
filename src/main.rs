@@ -6,9 +6,9 @@ use xml::writer::{EmitterConfig, XmlEvent};
 
 mod brushes;
 mod context;
+mod parser;
 mod trace_data;
 mod xml_helpers;
-mod parser;
 
 use brushes::Brush;
 use context::Context;
@@ -23,7 +23,6 @@ fn main() {
     // writer stage
     writer().unwrap();
 }
-
 
 fn writer() -> io::Result<()> {
     // let output = io::stdout();

@@ -22,7 +22,7 @@ pub(crate) struct Brush {
 /// and create a growing collection of brush so that no one brush is repeated
 /// twice
 pub(crate) struct BrushCollection {
-    brushes: Vec<Brush>
+    brushes: Vec<Brush>,
 }
 
 impl Brush {
@@ -63,7 +63,13 @@ impl Brush {
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "color")
-                .attr("value", &format!("#{:02X}{:02X}{:02X}", self.color.0,self.color.1,self.color.2)),
+                .attr(
+                    "value",
+                    &format!(
+                        "#{:02X}{:02X}{:02X}",
+                        self.color.0, self.color.1, self.color.2
+                    ),
+                ),
         )?;
         writer.write(XmlEvent::end_element())?;
         // writer.write(

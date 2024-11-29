@@ -9,7 +9,10 @@ pub(crate) fn get_id(attributes: Vec<OwnedAttribute>, match_string: String) -> O
 }
 
 /// gets the attributes we asked for in that order
-pub(crate) fn get_ids(attributes: Vec<OwnedAttribute>, match_string: Vec<String>) -> Vec<Option<String>> {
+pub(crate) fn get_ids(
+    attributes: Vec<OwnedAttribute>,
+    match_string: Vec<String>,
+) -> Vec<Option<String>> {
     match_string
         .into_iter()
         .map(|x| {
