@@ -17,9 +17,9 @@ pub(crate) enum ChannelKind {
     Y,
     /// F : force/pressure
     F,
-    /// TODO
+    /// azimuth angle of the pen
     OA,
-    /// TODO
+    /// elevation angle of the pen
     OE,
 }
 
@@ -35,6 +35,22 @@ impl ChannelKind {
                 _ => Err(()),
             },
             None => Err(()),
+        }
+    }
+
+    fn get_default_resolution_unit(&self) -> ResolutionUnits {
+        match self {
+            ChannelKind::X | ChannelKind::Y => ResolutionUnits::OneOverCm,
+            ChannelKind::F => ResolutionUnits::OneOverDev,
+            ChannelKind::OA | ChannelKind::OE => ResolutionUnits::OneOverDegree,
+        }
+    }
+
+    fn get_default_unit(&self) -> ChannelUnit {
+        match self {
+            ChannelKind::X | ChannelKind::Y => ChannelUnit::cm,
+            ChannelKind::F => ChannelUnit::dev,
+            ChannelKind::OA | ChannelKind::OE => ChannelUnit::deg,
         }
     }
 }
@@ -106,35 +122,48 @@ impl ChannelType {
 
 #[derive(Clone, Debug)]
 #[allow(unused)]
-enum InverseResolutionUnits {
+enum ResolutionUnits {
     // 1/cm
     OneOverCm,
+    // 1/mm
+    OneOverMm,
     // 1/dev, dev device unit
     OneOverDev,
+    // 1/deg, degree
+    OneOverDegree,
 }
 
-impl From<InverseResolutionUnits> for String {
-    fn from(value: InverseResolutionUnits) -> Self {
+impl From<ResolutionUnits> for String {
+    fn from(value: ResolutionUnits) -> Self {
         match value {
-            InverseResolutionUnits::OneOverCm => String::from("1/cm"),
-            InverseResolutionUnits::OneOverDev => String::from("1/dev"),
+            ResolutionUnits::OneOverCm => String::from("1/cm"),
+            ResolutionUnits::OneOverMm => String::from("1/mm"),
+            ResolutionUnits::OneOverDev => String::from("1/dev"),
+            ResolutionUnits::OneOverDegree => String::from("1/deg"),
         }
     }
 }
 
-impl Default for InverseResolutionUnits {
+impl Default for ResolutionUnits {
     fn default() -> Self {
-        InverseResolutionUnits::OneOverCm
+        ResolutionUnits::OneOverCm
     }
 }
 
+// TODO : use the full unit list
 #[derive(Clone, Debug)]
 #[allow(unused, non_camel_case_types)]
 enum ChannelUnit {
+    /// distance unit, `mm`
     mm,
+    /// distance unit, `cm`
     cm,
+    /// distance unit, `m`
     m,
+    /// device ind unit
     dev,
+    /// degree
+    deg,
 }
 
 impl Default for ChannelUnit {
@@ -150,6 +179,23 @@ impl From<ChannelUnit> for String {
             ChannelUnit::cm => String::from("cm"),
             ChannelUnit::m => String::from("m"),
             ChannelUnit::dev => String::from("dev"),
+            ChannelUnit::deg => String::from("deg"),
+        }
+    }
+}
+
+impl ChannelUnit {
+    fn parse(name: &Option<String>) -> Option<ChannelUnit> {
+        match name {
+            Some(value) => match value.as_str() {
+                "mm" => Some(ChannelUnit::mm),
+                "cm" => Some(ChannelUnit::cm),
+                "m" => Some(ChannelUnit::m),
+                "dev" => Some(ChannelUnit::dev),
+                "deg" => Some(ChannelUnit::deg),
+                _ => None,
+            },
+            None => None,
         }
     }
 }
@@ -160,31 +206,27 @@ pub struct Channel {
     types: ChannelType,
     // we are forcing this to u32 for now
     resolution_value: u32,
-    inverse_unit_resolution: InverseResolutionUnits,
+    unit_resolution: ResolutionUnits,
     unit_channel: ChannelUnit,
 }
 
 impl Channel {
-    
     pub fn initialise_channel_from_name(
         kind_type_unit_v: Vec<Option<String>>,
     ) -> Result<Channel, ()> {
         let kind = &kind_type_unit_v[0];
         let channel_type = &kind_type_unit_v[1];
-        // TODO : parse unit
-        //let unit = &kind_type_unit_v[2];
+        let unit = &kind_type_unit_v[2];
 
         let channel_kind = ChannelKind::parse(&kind)?;
 
         Ok(Channel {
-            kind: channel_kind,
+            kind: channel_kind.clone(),
             types: ChannelType::parse(&channel_type)?,
-            // the rest is there as a default value
-            // TODO : choose default resolution and unit 
-            // based on the channel kind (deg for OA, etc...)
+            // the rest is there as a default value, maybe we should also have a default value per kind ?
             resolution_value: 1000,
-            inverse_unit_resolution: InverseResolutionUnits::OneOverCm,
-            unit_channel: ChannelUnit::cm,
+            unit_resolution: channel_kind.get_default_resolution_unit(),
+            unit_channel: ChannelUnit::parse(unit).unwrap_or(channel_kind.get_default_unit()),
         })
     }
 }
@@ -206,14 +248,14 @@ impl Default for Context {
                     kind: ChannelKind::X,
                     types: ChannelType::Integer,
                     resolution_value: 1000,
-                    inverse_unit_resolution: InverseResolutionUnits::OneOverCm,
+                    unit_resolution: ResolutionUnits::OneOverCm,
                     unit_channel: ChannelUnit::cm,
                 },
                 Channel {
                     kind: ChannelKind::Y,
                     types: ChannelType::Integer,
                     resolution_value: 1000,
-                    inverse_unit_resolution: InverseResolutionUnits::OneOverCm,
+                    unit_resolution: ResolutionUnits::OneOverCm,
                     unit_channel: ChannelUnit::cm,
                 },
             ],
@@ -271,10 +313,7 @@ impl Context {
                     .attr("channel", &String::from(channel.kind.clone()))
                     .attr("name", "resolution")
                     .attr("value", &format!("{:?}", channel.resolution_value))
-                    .attr(
-                        "units",
-                        &String::from(channel.inverse_unit_resolution.clone()),
-                    ),
+                    .attr("units", &String::from(channel.unit_resolution.clone())),
             )?;
             writer.write(XmlEvent::end_element())?;
         }

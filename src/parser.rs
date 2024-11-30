@@ -72,6 +72,7 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                                 String::from("name"),
                                 String::from("type"),
                                 String::from("units"), // can be optional
+                                String::from("max")
                             ],
                         );
                         // add the channels to the CURRENT context
