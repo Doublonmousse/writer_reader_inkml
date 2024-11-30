@@ -3,9 +3,9 @@ use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
 use crate::brushes::BrushCollection;
-use crate::context::{Channel, ChannelType, Context};
+use crate::context::{Channel, ChannelKind, ChannelType, Context, ResolutionUnits};
 use crate::trace_data::TraceData;
-use crate::xml_helpers::{get_id, get_ids};
+use crate::xml_helpers::{get_id, get_ids, verify_channel_properties};
 
 #[derive(Default, Debug)]
 struct ParserContext {
@@ -17,6 +17,7 @@ struct ParserContext {
     /// a `traceFormat` tag (in that case there would be only one context !)
     context: HashMap<String, Context>,
     current_context_id: Option<String>,
+    current_brush_id: Option<String>,
     brushes: BrushCollection,
 }
 
@@ -43,6 +44,8 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                                 Context::create_empty(id_context.clone()),
                             );
                             parser_context.current_context_id = Some(id_context);
+                        } else {
+                            return Err(());
                         }
                     }
                     "inkSource" => {
@@ -72,27 +75,25 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                                 String::from("name"),
                                 String::from("type"),
                                 String::from("units"), // can be optional
-                                String::from("max")
+                                String::from("max"),
                             ],
                         );
                         // add the channels to the CURRENT context
                         println!("{:?}", ids);
-                        match parser_context.current_context_id {
-                            Some(ref current_context) => {
-                                parser_context
-                                    .context
-                                    .get_mut(current_context)
-                                    .ok_or(())?
-                                    .channel_list
-                                    .push(Channel::initialise_channel_from_name(ids)?);
-                            }
-                            _ => {}
+                        if let Some(ref current_context) = parser_context.current_context_id {
+                            parser_context
+                                .context
+                                .get_mut(current_context)
+                                .ok_or(())?
+                                .channel_list
+                                .push(Channel::initialise_channel_from_name(ids)?);
                         }
                     }
                     "channelProperties" => {
                         println!("start of channel properties");
                     }
                     "channelProperty" => {
+                        // inside of a context, the channelProperty gives additional info on the scaling of elements
                         let ids = get_ids(
                             attributes,
                             vec![
@@ -103,6 +104,42 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                             ],
                         );
                         println!("{:?}", ids);
+
+                        if verify_channel_properties(&ids)
+                            && parser_context.current_context_id.is_some()
+                            && parser_context
+                                .context
+                                .contains_key(&parser_context.current_context_id.clone().unwrap())
+                        {
+                            // get the current context
+                            let current_context = parser_context
+                                .context
+                                .get_mut(&parser_context.current_context_id.clone().unwrap())
+                                .unwrap();
+
+                            let channel_kind = ChannelKind::parse(&ids[0])?;
+                            let resolution_units = ResolutionUnits::parse(&ids[3])?;
+                            let value = &ids[2].clone().unwrap().parse::<f64>();
+                            if value.is_err() {
+                                return Err(());
+                            }
+
+                            // find the index
+                            let index = current_context.channel_list.iter().enumerate().fold(
+                                Err(()),
+                                |acc, (index, channel_el)| {
+                                    if channel_el.kind == channel_kind {
+                                        Ok(index)
+                                    } else {
+                                        acc
+                                    }
+                                },
+                            )?;
+                            let channel_to_update =
+                                current_context.channel_list.get_mut(index).unwrap();
+                            channel_to_update.resolution_value = value.clone().unwrap();
+                            channel_to_update.unit_resolution = resolution_units;
+                        }
                     }
                     "brush" => {
                         let brush_id = get_id(attributes, String::from("id"));

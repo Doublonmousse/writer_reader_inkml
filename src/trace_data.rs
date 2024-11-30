@@ -66,11 +66,10 @@ impl TraceData {
             data: types
                 .clone()
                 .into_iter()
-                .map(|x| ChannelData::map_from_channel_type(x))
+                .map(ChannelData::map_from_channel_type)
                 .collect(),
             last_value_difference: types.into_iter().map(|x| x.get_null_value()).collect(),
             last_value_modifiers: (1..=num_channels)
-                .into_iter()
                 .map(|_| ValueModifier::Explicit)
                 .collect(),
             index_channel: 0,
@@ -84,10 +83,7 @@ impl TraceData {
         //line_str : ex '37'-40'1680'0'0
         // one element from the trace string after
         // splitting per ,
-        for line in line_str
-            .split(",") //split per ,
-            .into_iter()
-        {
+        for line in line_str.split(",") {
             // reset the variables
             self.index_channel = 0;
             self.is_value_found = false;
@@ -178,7 +174,7 @@ impl TraceData {
 
             // verify that the end of the line is all spaces
             // check that we have not more ignored data further down
-            while let Some((_, next_char)) = iterator.next() {
+            for (_, next_char) in iterator {
                 match next_char {
                     ' ' | '\r' | '\n' => {}
                     _ => {
@@ -218,7 +214,7 @@ impl TraceData {
                             current.push(value);
                         }
                         ValueModifier::SingleDifference => {
-                            let previous = current.last().ok_or_else(|| ())?;
+                            let previous = current.last().ok_or(())?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -231,7 +227,7 @@ impl TraceData {
                             }
                         }
                         ValueModifier::DoubleDifference => {
-                            let previous = current.last().ok_or_else(|| ())?;
+                            let previous = current.last().ok_or(())?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -262,7 +258,7 @@ impl TraceData {
                             current.push(value);
                         }
                         ValueModifier::SingleDifference => {
-                            let previous = current.last().ok_or_else(|| ())?;
+                            let previous = current.last().ok_or(())?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -275,7 +271,7 @@ impl TraceData {
                             }
                         }
                         ValueModifier::DoubleDifference => {
-                            let previous = current.last().ok_or_else(|| ())?;
+                            let previous = current.last().ok_or(())?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {

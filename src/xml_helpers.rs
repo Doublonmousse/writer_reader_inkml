@@ -25,3 +25,19 @@ pub(crate) fn get_ids(
         })
         .collect()
 }
+
+pub(crate) fn verify_channel_properties(ids: &Vec<Option<String>>) -> bool {
+    if ids.iter().all(|new| new.is_some()) {
+        // we have verified all of the information is there
+        // according to the spec, channel name and value are required
+        // and units is optional. However, this is required (?) if the
+        // property name is "resolution" (and that's the only tag we will read for now)
+        if let Some(property_name) = &ids[1] {
+            if property_name.as_str() == "resolution" {
+                return true;
+            }
+        }
+        return false;
+    }
+    false
+}

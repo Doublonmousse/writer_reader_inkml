@@ -39,9 +39,9 @@ impl Brush {
         stroke_width: f64,
     ) -> Brush {
         Brush {
-            name: name,
-            color: color,
-            stroke_width: stroke_width,
+            name,
+            color,
+            stroke_width,
             ignorepressure: !context.pressure_channel_exist() || ignorepressure,
         }
     }

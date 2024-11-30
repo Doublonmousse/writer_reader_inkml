@@ -24,7 +24,7 @@ pub(crate) enum ChannelKind {
 }
 
 impl ChannelKind {
-    fn parse(name: &Option<String>) -> Result<ChannelKind, ()> {
+    pub(crate) fn parse(name: &Option<String>) -> Result<ChannelKind, ()> {
         match name {
             Some(value) => match value.as_str() {
                 "X" => Ok(ChannelKind::X),
@@ -70,15 +70,17 @@ impl From<ChannelKind> for String {
 /// type used for the encoding
 #[derive(Clone, Debug)]
 #[allow(unused)]
+#[derive(Default)]
 pub(crate) enum ChannelType {
     Integer,
+    #[default]
     Decimal,
     Double,
     Bool,
 }
 
 impl ChannelType {
-    fn parse(name: &Option<String>) -> Result<ChannelType, ()> {
+    pub(crate) fn parse(name: &Option<String>) -> Result<ChannelType, ()> {
         match name {
             Some(value) => match value.as_str() {
                 "integer" => Ok(ChannelType::Integer),
@@ -90,11 +92,25 @@ impl ChannelType {
             None => Err(()),
         }
     }
-}
 
-impl Default for ChannelType {
-    fn default() -> Self {
-        ChannelType::Decimal
+    fn get_max_value(&self, max_val: &Option<String>) -> Option<ChannelDataEl> {
+        match max_val {
+            None => None,
+            Some(max_parsed_str) => {
+                // match depending on the type
+                match self {
+                    ChannelType::Integer => max_parsed_str
+                        .parse::<i64>()
+                        .map(|val| ChannelDataEl::Integer(val))
+                        .ok(),
+                    ChannelType::Double | ChannelType::Decimal => max_parsed_str
+                        .parse::<f64>()
+                        .map(|val| ChannelDataEl::Double(val))
+                        .ok(),
+                    _ => None,
+                }
+            }
+        }
     }
 }
 
@@ -122,8 +138,10 @@ impl ChannelType {
 
 #[derive(Clone, Debug)]
 #[allow(unused)]
-enum ResolutionUnits {
+#[derive(Default)]
+pub(crate) enum ResolutionUnits {
     // 1/cm
+    #[default]
     OneOverCm,
     // 1/mm
     OneOverMm,
@@ -144,19 +162,30 @@ impl From<ResolutionUnits> for String {
     }
 }
 
-impl Default for ResolutionUnits {
-    fn default() -> Self {
-        ResolutionUnits::OneOverCm
+impl ResolutionUnits {
+    pub fn parse(name: &Option<String>) -> Result<ResolutionUnits, ()> {
+        match name {
+            Some(value) => match value.as_str() {
+                "1/cm" => Ok(ResolutionUnits::OneOverCm),
+                "1/mm" => Ok(ResolutionUnits::OneOverMm),
+                "1/dev" => Ok(ResolutionUnits::OneOverDev),
+                "1/deg" => Ok(ResolutionUnits::OneOverDegree),
+                _ => Err(()),
+            },
+            None => Err(()),
+        }
     }
 }
 
 // TODO : use the full unit list
 #[derive(Clone, Debug)]
 #[allow(unused, non_camel_case_types)]
+#[derive(Default)]
 enum ChannelUnit {
     /// distance unit, `mm`
     mm,
     /// distance unit, `cm`
+    #[default]
     cm,
     /// distance unit, `m`
     m,
@@ -164,12 +193,6 @@ enum ChannelUnit {
     dev,
     /// degree
     deg,
-}
-
-impl Default for ChannelUnit {
-    fn default() -> Self {
-        ChannelUnit::cm
-    }
 }
 
 impl From<ChannelUnit> for String {
@@ -202,11 +225,11 @@ impl ChannelUnit {
 
 #[derive(Clone, Debug)]
 pub struct Channel {
-    kind: ChannelKind,
+    pub kind: ChannelKind,
     types: ChannelType,
-    // we are forcing this to u32 for now
-    resolution_value: u32,
-    unit_resolution: ResolutionUnits,
+    pub resolution_value: f64,
+    max_value: Option<ChannelDataEl>,
+    pub unit_resolution: ResolutionUnits,
     unit_channel: ChannelUnit,
 }
 
@@ -214,17 +237,20 @@ impl Channel {
     pub fn initialise_channel_from_name(
         kind_type_unit_v: Vec<Option<String>>,
     ) -> Result<Channel, ()> {
-        let kind = &kind_type_unit_v[0];
         let channel_type = &kind_type_unit_v[1];
         let unit = &kind_type_unit_v[2];
 
-        let channel_kind = ChannelKind::parse(&kind)?;
+        let channel_kind = ChannelKind::parse(&kind_type_unit_v[0])?;
+        let types = ChannelType::parse(channel_type)?;
 
+        // we are parsing the max value
+        // useful for the F channel (where the mapping in 0-1 is done through the max value)
+        // For the F channel, if we have a dev unit, the max value will be used for the mapping instead
         Ok(Channel {
             kind: channel_kind.clone(),
-            types: ChannelType::parse(&channel_type)?,
-            // the rest is there as a default value, maybe we should also have a default value per kind ?
-            resolution_value: 1000,
+            types: types.clone(),
+            resolution_value: 1000.0,
+            max_value: types.get_max_value(&kind_type_unit_v[3]),
             unit_resolution: channel_kind.get_default_resolution_unit(),
             unit_channel: ChannelUnit::parse(unit).unwrap_or(channel_kind.get_default_unit()),
         })
@@ -236,6 +262,9 @@ pub(crate) struct Context {
     // name given to the context, name = ctx0 by default
     // refered by `contextRef="#ctx0" in the trace attr
     pub name: String,
+    /// vector of channels
+    /// Remark : we NEED the order to be preserved as the order here
+    /// also corresponds to the order in which traces are built
     pub channel_list: Vec<Channel>,
 }
 
@@ -247,14 +276,16 @@ impl Default for Context {
                 Channel {
                     kind: ChannelKind::X,
                     types: ChannelType::Integer,
-                    resolution_value: 1000,
+                    resolution_value: 1000.0,
+                    max_value: None,
                     unit_resolution: ResolutionUnits::OneOverCm,
                     unit_channel: ChannelUnit::cm,
                 },
                 Channel {
                     kind: ChannelKind::Y,
                     types: ChannelType::Integer,
-                    resolution_value: 1000,
+                    resolution_value: 1000.0,
+                    max_value: None,
                     unit_resolution: ResolutionUnits::OneOverCm,
                     unit_channel: ChannelUnit::cm,
                 },
@@ -266,7 +297,7 @@ impl Default for Context {
 impl Context {
     pub fn create_empty(name: String) -> Context {
         Context {
-            name: name,
+            name,
             channel_list: vec![],
         }
     }
@@ -275,7 +306,7 @@ impl Context {
         self.channel_list
             .clone()
             .into_iter()
-            .fold(false, |acc, x| acc || x.kind == ChannelKind::F)
+            .any(|x| x.kind == ChannelKind::F)
     }
 
     pub fn write_context<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), Error> {
