@@ -226,7 +226,7 @@ impl ChannelUnit {
 #[derive(Clone, Debug)]
 pub struct Channel {
     pub kind: ChannelKind,
-    types: ChannelType,
+    pub types: ChannelType,
     pub resolution_value: f64,
     max_value: Option<ChannelDataEl>,
     pub unit_resolution: ResolutionUnits,

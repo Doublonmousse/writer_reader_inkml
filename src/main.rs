@@ -18,8 +18,8 @@ use parser::parser;
 
 fn main() {
     //parser stage
-    // let file = File::open("onenote_multiple_contexts.xml").unwrap();
-    let file = File::open("correct.xml").unwrap();
+    let file = File::open("onenote_multiple_contexts.xml").unwrap();
+    //let file = File::open("correct.xml").unwrap();
 
     let buf_file = BufReader::new(file);
     parser(buf_file).unwrap();

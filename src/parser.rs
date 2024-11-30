@@ -145,6 +145,8 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                         let brush_id = get_id(attributes, String::from("id"));
                         println!("brush id {:?}", brush_id);
                         // we have to register a brush (with some name of default otherwise)
+                        // also need to init the current brush id (and check for duplicate)
+                        // NEXT STEP
                     }
                     "brushProperty" => {
                         let ids = get_ids(
@@ -156,6 +158,7 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                             ],
                         );
                         println!("{:?}", ids);
+                        // NEXT STEP 2
                     }
                     "trace" => {
                         println!("start of trace");
@@ -169,6 +172,18 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                             attributes,
                             vec![String::from("contextRef"), String::from("brushRef")],
                         );
+
+                        parser_context.current_context_id = match &ids[0] {
+                            Some(candidate) => Some(candidate.replace("#", "")),
+                            None => Some(String::from("ctx0s")),
+                        };
+                        // we will check inside the trace that the context exist or not
+                        parser_context.current_brush_id = match &ids[1] {
+                            Some(candidate) => Some(candidate.replace("#", "")),
+                            None => None,
+                        };
+                        // for the brush, for now not checked here, we should do that here though
+                        // TODO
                         println!("{:?}", ids);
                     }
                     _ => {}
@@ -204,18 +219,21 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
             Ok(rXmlEvent::Characters(string_out)) => {
                 // we have to verify we are inside a trace
                 if parser_context.is_trace {
-                    let ch_type_vec: Vec<ChannelType> = vec![
-                        ChannelType::Integer,
-                        ChannelType::Integer,
-                        ChannelType::Integer,
-                        ChannelType::Decimal,
-                        ChannelType::Double,
-                    ];
+                    // get the ChannelType from the current context
+                    let ch_type_vec = match parser_context.current_context_id {
+                        Some(ref key) => match parser_context.context.get(&key.clone()) {
+                            Some(current_context) => current_context
+                                .channel_list
+                                .iter()
+                                .map(|x| x.types.clone())
+                                .collect::<Vec<ChannelType>>(),
+                            None => return Err(()),
+                        },
+                        None => return Err(()),
+                    };
+                    // init the trace data parser
                     let mut trace_data = TraceData::from_channel_types(ch_type_vec);
-                    match trace_data.parse_raw_data(string_out) {
-                        Ok(()) => {}
-                        Err(()) => return Err(()),
-                    }
+                    trace_data.parse_raw_data(string_out)?;
                 }
             }
             Err(_) => return Err(()),
