@@ -22,14 +22,15 @@ fn main() {
         "onenote_multiple_contexts.xml",
         "correct.xml",
         "journal_output.xml",
-        "highlighter_onenote.xml",
         "10065.inkml",
+        "highlighter_onenote.xml",
     ];
 
     for path in paths {
         let file = File::open(path).unwrap();
         let buf_file = BufReader::new(file);
-        parser(buf_file).unwrap();
+        let result = parser(buf_file).unwrap();
+        println!("result : {:?}", result);
     }
 
     // writer stage

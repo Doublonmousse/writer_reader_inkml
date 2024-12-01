@@ -9,7 +9,7 @@ pub(crate) struct Brush {
     /// <brush xml:id="name">
     name: String,
     /// RGB triplet
-    color: (u8, u8, u8),
+    pub color: (u8, u8, u8),
     // simplified version, the stroke width is
     // given as a positive float corresponding to the width in
     // mm

@@ -239,7 +239,38 @@ pub fn parser<T: Read>(
                                             current_brush.stroke_width.max(stroke_width);
                                     }
                                     "color" => {
-                                        // NEXT STEP 3
+                                        match get_id(&attributes, String::from("value")) {
+                                            Some(color_string) => {
+                                                // format : #{:02X}{:02X}{:02X} for RGB
+                                                if color_string.len() == 7 {
+                                                    println!(
+                                                        "hello, matching color {:?}",
+                                                        color_string
+                                                    );
+                                                    let r = u8::from_str_radix(
+                                                        &color_string[1..=2],
+                                                        16,
+                                                    )
+                                                    .map_err(|_| ())?;
+                                                    let g = u8::from_str_radix(
+                                                        &color_string[3..=4],
+                                                        16,
+                                                    )
+                                                    .map_err(|_| ())?;
+                                                    let b = u8::from_str_radix(
+                                                        &color_string[5..=6],
+                                                        16,
+                                                    )
+                                                    .map_err(|_| ())?;
+                                                    current_brush.color = (r, g, b);
+                                                } else {
+                                                    return Err(());
+                                                }
+                                            }
+                                            None => {
+                                                return Err(());
+                                            }
+                                        }
                                     }
                                     "transparency" => {
                                         match get_id(&attributes, String::from("value")) {
