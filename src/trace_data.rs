@@ -7,8 +7,8 @@
 use crate::context::ChannelType;
 
 /// polymorphic enum to hold the data from a trace before a resolution conversion
-#[derive(Debug)]
-enum ChannelData {
+#[derive(Debug, Clone)]
+pub enum ChannelData {
     Integer(Vec<i64>),
     Bool(Vec<bool>),
     Double(Vec<f64>),
@@ -60,6 +60,10 @@ pub struct TraceData {
 }
 
 impl TraceData {
+    pub fn data(&self) -> Vec<ChannelData> {
+        self.data.clone()
+    }
+
     pub fn from_channel_types(types: Vec<ChannelType>) -> TraceData {
         let num_channels = types.len();
         TraceData {
@@ -99,7 +103,7 @@ impl TraceData {
                 match iterator.next() {
                     Some((_, next_char)) => {
                         match next_char {
-                            ' ' | '\r' | '\n' => {
+                            ' ' | '\r' | '\n' | '\t' => {
                                 if self.is_value_found {
                                     self.push_found_value()?;
                                 }
@@ -131,7 +135,7 @@ impl TraceData {
                                 if self.is_value_found {
                                     // if two values are concatenated with no space in between
                                     // parse the value up till now
-                                    self.push_found_value().unwrap();
+                                    self.push_found_value()?; //bug here ?
                                     self.is_value_found = true;
 
                                     // then restart
@@ -150,7 +154,7 @@ impl TraceData {
                                 // for boolean traces
                                 self.is_value_found = true;
                                 self.value_str.push(next_char);
-                                self.push_found_value().unwrap();
+                                self.push_found_value()?;
                             }
                             _ => return Err(()),
                         }
@@ -159,7 +163,7 @@ impl TraceData {
                         // we expect to have situation like 0,
                         // hence we have None but we have parsed correctly
                         if self.is_value_found {
-                            self.push_found_value().unwrap();
+                            self.push_found_value()?;
                         } else {
                             return Err(());
                             // we have exhausted the whole line before
@@ -170,20 +174,20 @@ impl TraceData {
                 }
             }
 
-            println!("verifying what's left is only spaces");
+            //println!("verifying what's left is only spaces");
 
             // verify that the end of the line is all spaces
             // check that we have not more ignored data further down
             for (_, next_char) in iterator {
                 match next_char {
-                    ' ' | '\r' | '\n' => {}
+                    ' ' | '\r' | '\n' | '\t' => {}
                     _ => {
                         println!("char not expected {:?}", next_char);
                         return Err(()); //there was something left ...
                     }
                 }
             }
-            println!("ok, this was only spaces");
+            // println!("ok, this was only spaces");
         }
 
         for i in 0..self.data.len() {
@@ -194,20 +198,20 @@ impl TraceData {
 
     fn push_found_value(&mut self) -> Result<(), ()> {
         // parse the value
-        println!(
-            "End val, Value up till now {:?}, modifier {:?}, index : {:?}",
-            self.value_str, self.new_modifier, self.index_channel
-        );
+        // debug trace
+        // println!(
+        //     "End val, Value up till now {:?}, modifier {:?}, index : {:?}",
+        //     self.value_str, self.new_modifier, self.index_channel
+        // );
 
         // push to the corresponding channel
         match &mut self.data.get_mut(self.index_channel).ok_or(())? {
             ChannelData::Integer(current) => {
                 let parsed_value = self.value_str.parse::<i64>();
-                // need to duplicate for double and bool ? can't do a generic here because of the enums ?
-                println!(
-                    "parsed value : {:?} value str {:?}",
-                    parsed_value, self.value_str
-                );
+                // println!(
+                //     "parsed value : {:?} value str {:?}",
+                //     parsed_value, self.value_str
+                // );
                 match parsed_value {
                     Ok(value) => match self.new_modifier {
                         ValueModifier::Explicit => {
@@ -248,10 +252,10 @@ impl TraceData {
             ChannelData::Double(current) => {
                 let parsed_value: Result<f64, std::num::ParseFloatError> =
                     self.value_str.parse::<f64>();
-                println!(
-                    "parsed value : {:?} value str {:?}",
-                    parsed_value, self.value_str
-                );
+                // println!(
+                //     "parsed value : {:?} value str {:?}",
+                //     parsed_value, self.value_str
+                // );
                 match parsed_value {
                     Ok(value) => match self.new_modifier {
                         ValueModifier::Explicit => {
@@ -296,10 +300,11 @@ impl TraceData {
                     "F" => Ok(false),
                     _ => Err(()),
                 };
-                println!(
-                    "parsed value : {:?} value str {:?}",
-                    parsed_value, self.value_str
-                );
+                // println!(
+                //     "parsed value : {:?} value str {:?}",
+                //     parsed_value, self.value_str
+                // );
+
                 // boolean : will be true or false, not changing anything there
                 // so effectively the corresponding index in the last_value_difference
                 // element is unused

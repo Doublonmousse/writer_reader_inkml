@@ -1,4 +1,5 @@
 use crate::context::Context;
+use std::collections::HashMap;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
 
@@ -12,8 +13,21 @@ pub(crate) struct Brush {
     // simplified version, the stroke width is
     // given as a positive float corresponding to the width in
     // mm
-    stroke_width: f64,
-    ignorepressure: bool,
+    pub stroke_width: f64,
+    pub ignorepressure: bool,
+    pub transparency: u8,
+}
+
+impl Brush {
+    pub(crate) fn init_brush_with_id(id: &String) -> Brush {
+        Brush {
+            name: id.clone(),
+            color: (255, 255, 255),
+            stroke_width: 0.0,
+            transparency: 0,
+            ignorepressure: true,
+        }
+    }
 }
 
 /// We iterate over the strokes and construct a collection of brushes
@@ -27,22 +41,23 @@ pub(crate) struct Brush {
 /// we may have some more efficient ways to make sure a brush doesn't already exist
 #[derive(Default, Debug)]
 pub(crate) struct BrushCollection {
-    brushes: Vec<Brush>,
+    pub brushes: HashMap<String, Brush>,
 }
 
 impl Brush {
     pub fn init(
         name: String,
-        context: &Context,
         color: (u8, u8, u8),
         ignorepressure: bool,
+        transparency: u8,
         stroke_width: f64,
     ) -> Brush {
         Brush {
             name,
             color,
-            stroke_width,
-            ignorepressure: !context.pressure_channel_exist() || ignorepressure,
+            stroke_width: stroke_width,
+            transparency: transparency,
+            ignorepressure: ignorepressure,
         }
     }
 
@@ -77,12 +92,32 @@ impl Brush {
                 ),
         )?;
         writer.write(XmlEvent::end_element())?;
-        // writer.write(
-        //     XmlEvent::start_element("brushProperty")
-        //         .attr("name", "ignorePressure")
-        //         .attr("value", if self.ignorepressure { "1" } else { "0" }),
-        // )?;
-        // writer.write(XmlEvent::end_element())?;
+        // transparency doesn't seem to work well on export
+        // so we reserve the field for import only
+        // if self.transparency > 0 {
+        //     writer.write(
+        //         XmlEvent::start_element("brushProperty")
+        //             .attr("name", "transparency")
+        //             .attr("value", &format!("{:?}", self.transparency)),
+        //     )?;
+        //     writer.write(XmlEvent::end_element())?;
+        //     writer.write(
+        //         XmlEvent::start_element("brushProperty")
+        //             .attr("name", "tip")
+        //             .attr("value", "rectangle"),
+        //     )?;
+        //     writer.write(XmlEvent::end_element())?;
+        // }
+
+        if self.ignorepressure {
+            writer.write(
+                XmlEvent::start_element("brushProperty")
+                    .attr("name", "ignorePressure")
+                    .attr("value", "1"),
+            )?;
+            writer.write(XmlEvent::end_element())?;
+        }
+
         writer.write(XmlEvent::end_element())?; //close brush
 
         Ok(())

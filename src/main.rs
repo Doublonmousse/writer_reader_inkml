@@ -18,11 +18,19 @@ use parser::parser;
 
 fn main() {
     //parser stage
-    let file = File::open("onenote_multiple_contexts.xml").unwrap();
-    //let file = File::open("correct.xml").unwrap();
+    let paths = vec![
+        "onenote_multiple_contexts.xml",
+        "correct.xml",
+        "journal_output.xml",
+        "highlighter_onenote.xml",
+        "10065.inkml",
+    ];
 
-    let buf_file = BufReader::new(file);
-    parser(buf_file).unwrap();
+    for path in paths {
+        let file = File::open(path).unwrap();
+        let buf_file = BufReader::new(file);
+        parser(buf_file).unwrap();
+    }
 
     // writer stage
     writer().unwrap();
@@ -59,7 +67,13 @@ fn writer() -> io::Result<()> {
     // collect brushes
 
     // for now one brush
-    let brush = Brush::init(String::from("br1"), &context, (255, 255, 12), true, 0.2);
+    let brush = Brush::init(
+        String::from("br1"),
+        (255, 255, 12),
+        !&context.pressure_channel_exist(),
+        125,
+        0.2,
+    );
     // write brushes
     brush.write_brush(&mut writer).unwrap();
 

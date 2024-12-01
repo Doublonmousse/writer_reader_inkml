@@ -1,11 +1,18 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, SeekFrom};
+use std::num::ParseFloatError;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
-use crate::brushes::BrushCollection;
-use crate::context::{Channel, ChannelKind, ChannelType, Context, ResolutionUnits};
-use crate::trace_data::TraceData;
+use crate::brushes::{Brush, BrushCollection};
+use crate::context::{Channel, ChannelKind, ChannelType, ChannelUnit, Context, ResolutionUnits};
+use crate::trace_data::{ChannelData, TraceData};
 use crate::xml_helpers::{get_id, get_ids, verify_channel_properties};
+
+#[derive(Debug)]
+enum ContextStartElement {
+    TraceFormat,
+    Context,
+}
 
 #[derive(Default, Debug)]
 struct ParserContext {
@@ -17,13 +24,26 @@ struct ParserContext {
     /// a `traceFormat` tag (in that case there would be only one context !)
     context: HashMap<String, Context>,
     current_context_id: Option<String>,
+    start_context_element: Option<ContextStartElement>,
     current_brush_id: Option<String>,
     brushes: BrushCollection,
 }
 
-pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
+pub fn parser<T: Read>(
+    buf_file: T,
+) -> Result<
+    (
+        // maybe we should set a ParserResult apart for this
+        Vec<(String, String, Vec<ChannelData>)>,
+        HashMap<String, Context>,
+        HashMap<String, Brush>,
+    ),
+    (),
+> {
     let parser = EventReader::new(buf_file);
     let mut parser_context = ParserContext::default();
+
+    let mut trace_collect: Vec<(String, String, Vec<ChannelData>)> = vec![];
 
     for xml_event in parser {
         match xml_event {
@@ -34,7 +54,7 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                 match name.local_name.as_str() {
                     "context" => {
                         let id_context =
-                            get_id(attributes, String::from("id")).unwrap_or(String::from("ctx0"));
+                            get_id(&attributes, String::from("id")).unwrap_or(String::from("ctx0"));
                         println!("context id :{:?}", id_context);
 
                         // create the empty context
@@ -44,12 +64,14 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                                 Context::create_empty(id_context.clone()),
                             );
                             parser_context.current_context_id = Some(id_context);
+                            parser_context.start_context_element =
+                                Some(ContextStartElement::Context);
                         } else {
                             return Err(());
                         }
                     }
                     "inkSource" => {
-                        let id_source = get_id(attributes, String::from("id"));
+                        let id_source = get_id(&attributes, String::from("id"));
                         println!("source id :{:?}", id_source);
                         // useful to start/end the parsing of a source (full context !)
                         // though there are cases where only the trace format can exist
@@ -64,8 +86,9 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                                 Context::create_empty(String::from("ctx0")),
                             );
                             parser_context.current_context_id = Some(String::from("ctx0"));
+                            parser_context.start_context_element =
+                                Some(ContextStartElement::TraceFormat);
                         }
-
                         println!("here is the current context: {:?}", parser_context.context);
                     }
                     "channel" => {
@@ -142,23 +165,114 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                         }
                     }
                     "brush" => {
-                        let brush_id = get_id(attributes, String::from("id"));
+                        // either the id exist or not
+                        // if not fallback on a default value
+                        let brush_id =
+                            get_id(&attributes, String::from("id")).unwrap_or(String::from("br0"));
                         println!("brush id {:?}", brush_id);
-                        // we have to register a brush (with some name of default otherwise)
-                        // also need to init the current brush id (and check for duplicate)
-                        // NEXT STEP
+
+                        parser_context.current_brush_id = Some(brush_id.clone());
+                        if parser_context.brushes.brushes.contains_key(&brush_id) {
+                            return Err(());
+                            // we cannot have twice the same brush id
+                        } else {
+                            // we init the brush with default parameters
+                            // this also allows the default parameter to serve as a fallback (except for the stroke width)
+                            parser_context
+                                .brushes
+                                .brushes
+                                .insert(brush_id.clone(), Brush::init_brush_with_id(&brush_id));
+                        }
                     }
                     "brushProperty" => {
-                        let ids = get_ids(
-                            attributes,
-                            vec![
-                                String::from("name"),
-                                String::from("value"),
-                                String::from("units"),
-                            ],
-                        );
-                        println!("{:?}", ids);
-                        // NEXT STEP 2
+                        // we first check what property we have
+                        let property_name_opt = get_id(&attributes, String::from("name"));
+
+                        // get the current brush
+                        let current_brush = match parser_context.current_brush_id {
+                            None => return Err(()),
+                            Some(ref key) => {
+                                match parser_context.brushes.brushes.get_mut(&key.clone()) {
+                                    Some(current) => current,
+                                    None => return Err(()),
+                                }
+                            }
+                        };
+
+                        // TODO
+                        // let value = get_ids(
+                        //     attributes,
+                        //     vec![
+                        //         String::from("value"),
+                        //         String::from("units"),
+                        //     ],
+                        // );
+
+                        match property_name_opt {
+                            Some(property_name) => {
+                                match property_name.as_str() {
+                                    "width" | "height" => {
+                                        // as we don't have support for rectangular brushes
+                                        // we increase the stroke width and take the max of both
+
+                                        // we convert everything to mm here
+                                        let in_unit =
+                                            match get_id(&attributes, String::from("units")) {
+                                                None => return Err(()),
+                                                Some(unit_str) => {
+                                                    match ChannelUnit::parse(&Some(unit_str)) {
+                                                        Some(unit) => unit,
+                                                        None => return Err(()),
+                                                    }
+                                                }
+                                            };
+                                        let value = match get_id(&attributes, String::from("value"))
+                                        {
+                                            None => return Err(()),
+                                            Some(value_str) => {
+                                                value_str.parse::<f64>().map_err(|_| ())?
+                                            }
+                                        };
+                                        let stroke_width =
+                                            in_unit.convert_to(ChannelUnit::mm, value)?;
+                                        current_brush.stroke_width =
+                                            current_brush.stroke_width.max(stroke_width);
+                                    }
+                                    "color" => {
+                                        // NEXT STEP 3
+                                    }
+                                    "transparency" => {
+                                        match get_id(&attributes, String::from("value")) {
+                                            None => return Err(()),
+                                            Some(value_str) => {
+                                                current_brush.transparency =
+                                                    value_str.parse::<u8>().map_err(|_| ())?;
+                                            }
+                                        }
+                                    }
+                                    "ignorePressure" => {
+                                        let value = get_id(&attributes, String::from("value"));
+                                        match value {
+                                            Some(bool_str) => match bool_str.as_str() {
+                                                "1" => {
+                                                    current_brush.ignorepressure = true;
+                                                }
+                                                "0" => {
+                                                    current_brush.ignorepressure = false;
+                                                }
+                                                _ => return Err(()),
+                                            },
+                                            None => return Err(()),
+                                        }
+                                    }
+                                    _ => {
+                                        // ignore
+                                        println!("brush property ignored: {:?}", property_name);
+                                    }
+                                }
+                            }
+                            None => return Err(()),
+                        }
                     }
                     "trace" => {
                         println!("start of trace");
@@ -167,7 +281,7 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                         // this will give the information on the type (int or float) of each channel
                         // and their number
                         // this will allow to read the trace context that follows
-                        // and then populate to a stroke with a color and a width
+                        // and then populate to a stroke with a color and a width (+ eventually transparency)
                         let ids = get_ids(
                             attributes,
                             vec![String::from("contextRef"), String::from("brushRef")],
@@ -175,16 +289,31 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
 
                         parser_context.current_context_id = match &ids[0] {
                             Some(candidate) => Some(candidate.replace("#", "")),
-                            None => Some(String::from("ctx0s")),
+                            None => Some(String::from("ctx0")),
                         };
                         // we will check inside the trace that the context exist or not
+
+                        // we check the brush existence here
                         parser_context.current_brush_id = match &ids[1] {
-                            Some(candidate) => Some(candidate.replace("#", "")),
-                            None => None,
+                            Some(candidate_with_hash) => {
+                                let candidate = candidate_with_hash.clone().replace("#", "");
+                                if !parser_context.brushes.brushes.contains_key(&candidate) {
+                                    return Err(());
+                                }
+                                Some(candidate)
+                            }
+                            None => {
+                                // ok only if
+                                // -zero brush exist : init of the default one latser
+                                // - one brush only exist
+                                // can we have no brush and need to define a default brush ? not the case for office inkml files .
+                                match parser_context.brushes.brushes.len() {
+                                    0 => None,
+                                    1 => parser_context.brushes.brushes.keys().next().cloned(),
+                                    _ => return Err(()),
+                                }
+                            }
                         };
-                        // for the brush, for now not checked here, we should do that here though
-                        // TODO
-                        println!("{:?}", ids);
                     }
                     _ => {}
                 }
@@ -195,12 +324,20 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                 }
                 "context" => {
                     parser_context.current_context_id = None;
+                    parser_context.start_context_element = None;
                     println!("\x1b[93mclosing context\x1b[0m");
                 }
                 "inkSource" => {
                     println!("\x1b[93mclosing inkSource\x1b[0m");
                 }
                 "traceFormat" => {
+                    if !matches!(
+                        parser_context.start_context_element,
+                        Some(ContextStartElement::TraceFormat)
+                    ) {
+                        parser_context.start_context_element = None;
+                        parser_context.current_context_id = None;
+                    }
                     println!("\x1b[93mclosing traceFormat\x1b[0m");
                 }
                 "channelProperties" => {
@@ -210,9 +347,28 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                 "trace" => {
                     println!("\x1b[93mclosing trace\x1b[0m");
                     parser_context.is_trace = false;
+                    parser_context.current_context_id = None;
+                    parser_context.current_brush_id = None;
                 }
                 "brush" => {
                     println!("\x1b[93mclosing brush\x1b[0m");
+
+                    // if no stroke width was given, give a min default value
+                    match parser_context.current_brush_id {
+                        None => return Err(()),
+                        Some(current_key) => {
+                            let current_brush =
+                                match parser_context.brushes.brushes.get_mut(&current_key) {
+                                    Some(brush) => brush,
+                                    None => return Err(()),
+                                };
+                            if current_brush.stroke_width == 0.0 {
+                                current_brush.stroke_width = 0.1;
+                            }
+                        }
+                    }
+
+                    parser_context.current_brush_id = None;
                 }
                 _ => {}
             },
@@ -231,14 +387,52 @@ pub fn parser<T: Read>(buf_file: T) -> Result<(), ()> {
                         },
                         None => return Err(()),
                     };
+
+                    println!("start of trace char");
+
                     // init the trace data parser
                     let mut trace_data = TraceData::from_channel_types(ch_type_vec);
                     trace_data.parse_raw_data(string_out)?;
+
+                    if (parser_context.current_brush_id.is_none())
+                        && (parser_context.brushes.brushes.is_empty()
+                            || parser_context
+                                .brushes
+                                .brushes
+                                .contains_key(&String::from("br0")))
+                    {
+                        if parser_context.brushes.brushes.is_empty() {
+                            // no brush was defined. We add a default brush
+                            parser_context.brushes.brushes.insert(
+                                String::from("br0"),
+                                Brush::init(String::from("br0"), (255, 255, 255), true, 0, 0.1),
+                            );
+                        }
+                        parser_context.current_brush_id = Some(String::from("br0"));
+                    }
+
+                    // collect output
+                    trace_collect.push((
+                        parser_context.current_context_id.unwrap(),
+                        parser_context.current_brush_id.unwrap(),
+                        trace_data.data(),
+                    ));
+
+                    parser_context.current_brush_id = None;
+                    parser_context.current_context_id = None;
                 }
             }
             Err(_) => return Err(()),
             _ => {}
         }
     }
-    Ok(())
+
+    Ok((
+        trace_collect,
+        parser_context.context,
+        parser_context.brushes.brushes,
+    ))
+    // check how to go from data to rnote
+    // maybe do a test with the other .jiix and json data already collected
+    // up till now
 }

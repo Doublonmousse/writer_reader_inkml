@@ -21,6 +21,8 @@ pub(crate) enum ChannelKind {
     OA,
     /// elevation angle of the pen
     OE,
+    OTx,
+    OTy,
 }
 
 impl ChannelKind {
@@ -32,6 +34,8 @@ impl ChannelKind {
                 "F" => Ok(ChannelKind::F),
                 "OA" => Ok(ChannelKind::OA),
                 "OE" => Ok(ChannelKind::OE),
+                "OTx" => Ok(ChannelKind::OTx),
+                "OTy" => Ok(ChannelKind::OTy),
                 _ => Err(()),
             },
             None => Err(()),
@@ -42,7 +46,9 @@ impl ChannelKind {
         match self {
             ChannelKind::X | ChannelKind::Y => ResolutionUnits::OneOverCm,
             ChannelKind::F => ResolutionUnits::OneOverDev,
-            ChannelKind::OA | ChannelKind::OE => ResolutionUnits::OneOverDegree,
+            ChannelKind::OA | ChannelKind::OE | ChannelKind::OTx | ChannelKind::OTy => {
+                ResolutionUnits::OneOverDegree
+            }
         }
     }
 
@@ -50,7 +56,9 @@ impl ChannelKind {
         match self {
             ChannelKind::X | ChannelKind::Y => ChannelUnit::cm,
             ChannelKind::F => ChannelUnit::dev,
-            ChannelKind::OA | ChannelKind::OE => ChannelUnit::deg,
+            ChannelKind::OA | ChannelKind::OE | ChannelKind::OTx | ChannelKind::OTy => {
+                ChannelUnit::deg
+            }
         }
     }
 }
@@ -63,6 +71,8 @@ impl From<ChannelKind> for String {
             ChannelKind::F => String::from("F"),
             ChannelKind::OA => String::from("OA"),
             ChannelKind::OE => String::from("OF"),
+            ChannelKind::OTx => String::from("OTx"),
+            ChannelKind::OTy => String::from("OTy"),
         }
     }
 }
@@ -181,7 +191,7 @@ impl ResolutionUnits {
 #[derive(Clone, Debug)]
 #[allow(unused, non_camel_case_types)]
 #[derive(Default)]
-enum ChannelUnit {
+pub(crate) enum ChannelUnit {
     /// distance unit, `mm`
     mm,
     /// distance unit, `cm`
@@ -208,7 +218,7 @@ impl From<ChannelUnit> for String {
 }
 
 impl ChannelUnit {
-    fn parse(name: &Option<String>) -> Option<ChannelUnit> {
+    pub(crate) fn parse(name: &Option<String>) -> Option<ChannelUnit> {
         match name {
             Some(value) => match value.as_str() {
                 "mm" => Some(ChannelUnit::mm),
@@ -219,6 +229,24 @@ impl ChannelUnit {
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    pub(crate) fn convert_to(&self, output_unit: ChannelUnit, input_value: f64) -> Result<f64, ()> {
+        // pretty horrible, better to use a table/matrix with conversion values ?
+        match (self, output_unit) {
+            (ChannelUnit::mm, ChannelUnit::mm) => Ok(input_value),
+            (ChannelUnit::mm, ChannelUnit::cm) => Ok(input_value * 1e-1),
+            (ChannelUnit::mm, ChannelUnit::m) => Ok(input_value * 1e-3),
+            (ChannelUnit::cm, ChannelUnit::mm) => Ok(input_value * 1e1),
+            (ChannelUnit::cm, ChannelUnit::cm) => Ok(input_value),
+            (ChannelUnit::cm, ChannelUnit::m) => Ok(input_value * 1e-2),
+            (ChannelUnit::m, ChannelUnit::mm) => Ok(input_value * 1e3),
+            (ChannelUnit::m, ChannelUnit::cm) => Ok(input_value * 1e2),
+            (ChannelUnit::m, ChannelUnit::m) => Ok(input_value),
+            (ChannelUnit::deg, ChannelUnit::deg) => Ok(input_value),
+            (ChannelUnit::dev, ChannelUnit::dev) => Ok(input_value),
+            _ => Err(()),
         }
     }
 }

@@ -1,10 +1,10 @@
 use xml::attribute::OwnedAttribute;
 
-pub(crate) fn get_id(attributes: Vec<OwnedAttribute>, match_string: String) -> Option<String> {
+pub(crate) fn get_id(attributes: &Vec<OwnedAttribute>, match_string: String) -> Option<String> {
     attributes
-        .into_iter()
+        .iter()
         .filter(|x| x.name.local_name == match_string)
-        .map(|x| x.value)
+        .map(|x| x.value.clone())
         .next()
 }
 
