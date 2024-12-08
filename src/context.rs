@@ -286,7 +286,7 @@ impl Channel {
 }
 
 #[derive(Debug)]
-pub(crate) struct Context {
+pub struct Context {
     // name given to the context, name = ctx0 by default
     // refered by `contextRef="#ctx0" in the trace attr
     pub name: String,

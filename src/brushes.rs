@@ -3,7 +3,7 @@ use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
 
 #[derive(Debug)]
-pub(crate) struct Brush {
+pub struct Brush {
     /// name for the brush
     /// ```html
     /// <brush xml:id="name">
