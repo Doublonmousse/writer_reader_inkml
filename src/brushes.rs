@@ -25,7 +25,7 @@ impl Brush {
     pub(crate) fn init_brush_with_id(id: &String) -> Brush {
         Brush {
             name: id.clone(),
-            color: (255, 255, 255),
+            color: (0, 0, 0),
             stroke_width: 0.0,
             transparency: 0,
             ignorepressure: true,
