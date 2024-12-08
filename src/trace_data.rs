@@ -14,6 +14,23 @@ pub enum ChannelData {
     Double(Vec<f64>),
 }
 
+impl ChannelData {
+    pub(crate) fn cast_to_float(&self, scaling: f64) -> Vec<f64> {
+        match self {
+            ChannelData::Integer(int_vec) => {
+                int_vec.into_iter().map(|x| *x as f64 * scaling).collect()
+            }
+            ChannelData::Bool(bool_vec) => bool_vec
+                .into_iter()
+                .map(|x| (if *x { 1.0 } else { 0.0 }) * scaling)
+                .collect(),
+            ChannelData::Double(double_vec) => {
+                double_vec.into_iter().map(|x| x * scaling).collect()
+            }
+        }
+    }
+}
+
 /// polymorhpic enum to hold the data from a point of the trace
 /// Only used for holding the last element or difference (in order to calculate
 /// 'x or "y)
@@ -22,6 +39,27 @@ pub enum ChannelDataEl {
     Integer(i64),
     Double(f64),
     Bool,
+}
+
+impl ChannelDataEl {
+    pub(crate) fn to_float(&self) -> f64 {
+        match self {
+            Self::Integer(integer) => *integer as f64,
+            Self::Double(double) => *double,
+            Self::Bool => 1.0,
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Type to hold a formatted stroke data
+/// - X as a float channel in cm unit
+/// - Y as a float channel in cm unit
+/// - F as a float channel in dev unit (from 0.0 to 1.0)
+pub struct FormattedStroke {
+    pub X: Vec<f64>,
+    pub Y: Vec<f64>,
+    pub F: Vec<f64>,
 }
 
 /// Type of modifier

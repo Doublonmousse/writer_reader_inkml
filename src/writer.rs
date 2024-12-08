@@ -1,8 +1,8 @@
-use std::{f32::consts::PI, io};
-use xml::writer::{EmitterConfig, XmlEvent};
+use crate::brushes::Brush;
 use crate::context::Context;
 use crate::traits::Writable;
-use crate::brushes::Brush;
+use std::{f32::consts::PI, io};
+use xml::writer::{EmitterConfig, XmlEvent};
 
 pub fn writer() -> io::Result<()> {
     // let output = io::stdout();
@@ -38,7 +38,9 @@ pub fn writer() -> io::Result<()> {
     let brush = Brush::init(
         String::from("br1"),
         (255, 255, 12),
-        !&context.pressure_channel_exist(),
+        !&context
+            .channel_exists(crate::context::ChannelKind::F)
+            .is_some(),
         125,
         0.2,
     );

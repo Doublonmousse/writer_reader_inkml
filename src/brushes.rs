@@ -4,7 +4,7 @@ use xml::writer::{Error, EventWriter, XmlEvent};
 
 use crate::traits::Writable;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Brush {
     /// name for the brush
     /// ```html

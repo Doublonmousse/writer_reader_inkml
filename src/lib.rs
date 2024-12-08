@@ -9,4 +9,5 @@ mod writer;
 
 //re export
 pub use parser::parser;
+pub use parser::parse_formatted;
 pub use writer::writer;

@@ -4,6 +4,7 @@ use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
 use crate::brushes::{Brush, BrushCollection};
 use crate::context::{Channel, ChannelKind, ChannelType, ChannelUnit, Context, ResolutionUnits};
+use crate::trace_data::FormattedStroke;
 use crate::trace_data::{ChannelData, TraceData};
 use crate::xml_helpers::{get_id, get_ids, verify_channel_properties};
 
@@ -28,6 +29,9 @@ struct ParserContext {
     brushes: BrushCollection,
 }
 
+/// This function returns the raw data from the trace
+/// Hence all supported channels with their origin types are
+/// returned, with corresponding resolution, brush properties and so on
 pub fn parser<T: Read>(
     buf_file: T,
 ) -> Result<
@@ -198,15 +202,6 @@ pub fn parser<T: Read>(
                             }
                         };
 
-                        // TODO
-                        // let value = get_ids(
-                        //     attributes,
-                        //     vec![
-                        //         String::from("value"),
-                        //         String::from("units"),
-                        //     ],
-                        // );
-
                         match property_name_opt {
                             Some(property_name) => {
                                 match property_name.as_str() {
@@ -334,7 +329,7 @@ pub fn parser<T: Read>(
                             }
                             None => {
                                 // ok only if
-                                // -zero brush exist : init of the default one latser
+                                // - zero brush exist : init of the default one latser
                                 // - one brush only exist
                                 // can we have no brush and need to define a default brush ? not the case for office inkml files .
                                 match parser_context.brushes.brushes.len() {
@@ -462,7 +457,67 @@ pub fn parser<T: Read>(
         parser_context.context,
         parser_context.brushes.brushes,
     ))
-    // check how to go from data to rnote
-    // maybe do a test with the other .jiix and json data already collected
-    // up till now
+}
+
+/// This function formats the output of the parser
+/// for an easier use.
+/// We return an iterator over strokes where the X,Y and F
+/// channels are returned as floats with X and Y being in cm unit
+/// and F between 0 and 1 (and 1.0 if F is missing), with the associated brush
+pub fn parse_formatted<T: Read>(buf_file: T) -> Result<Vec<(FormattedStroke, Brush)>, ()> {
+    let mut formatted_result: Vec<(FormattedStroke, Brush)> = vec![];
+    let (strokes, context_dict, brushes_dict) = parser(buf_file)?;
+
+    // iterate over results
+    for (context_str, brush_str, stroke) in strokes {
+        let context = context_dict.get(&context_str).ok_or_else(|| ())?;
+        let brush = brushes_dict.get(&brush_str).ok_or_else(|| ())?.clone();
+
+        // verify X, Y exist
+        let (x_idx, y_idx) = (
+            context.channel_exists(ChannelKind::X),
+            context.channel_exists(ChannelKind::Y),
+        );
+        let f_idx = context.channel_exists(ChannelKind::F);
+
+        if x_idx.is_some() && y_idx.is_some() {
+            // calculate scalings
+            let x_ratio = context
+                .channel_list
+                .get(x_idx.unwrap())
+                .unwrap()
+                .get_scaling();
+            let y_ratio = context
+                .channel_list
+                .get(x_idx.unwrap())
+                .unwrap()
+                .get_scaling();
+
+            formatted_result.push((
+                FormattedStroke {
+                    X: stroke.get(x_idx.unwrap()).unwrap().cast_to_float(x_ratio),
+                    Y: stroke.get(y_idx.unwrap()).unwrap().cast_to_float(y_ratio),
+                    F: if f_idx.is_some() {
+                        let f_ratio = context
+                            .channel_list
+                            .get(f_idx.unwrap())
+                            .unwrap()
+                            .get_scaling();
+                        stroke.get(f_idx.unwrap()).unwrap().cast_to_float(f_ratio)
+                    } else {
+                        stroke
+                            .get(x_idx.unwrap())
+                            .unwrap()
+                            .cast_to_float(1.0)
+                            .into_iter()
+                            .map(|_| 1.0)
+                            .collect()
+                    },
+                },
+                brush,
+            ));
+        }
+    }
+
+    Ok(formatted_result)
 }

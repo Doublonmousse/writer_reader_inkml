@@ -3,12 +3,13 @@
 // but we use as many brushes as needed
 
 use crate::trace_data::ChannelDataEl;
+use crate::traits::Writable;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
-use crate::traits::Writable;
 
 /// types of channel
-/// For now we allow X,Y only
+/// We will only use X,Y,F for the most part
+/// TODO : use the full channel list from the inkml spec
 #[derive(Clone, PartialEq, Debug)]
 #[allow(unused)]
 pub enum ChannelKind {
@@ -188,7 +189,7 @@ impl ResolutionUnits {
     }
 }
 
-// TODO : use the full unit list
+// TODO : use the full unit list from the inkml spec
 #[derive(Clone, Debug)]
 #[allow(unused, non_camel_case_types)]
 #[derive(Default)]
@@ -284,6 +285,21 @@ impl Channel {
             unit_channel: ChannelUnit::parse(unit).unwrap_or(channel_kind.get_default_unit()),
         })
     }
+
+    pub fn get_scaling(&self) -> f64 {
+        if self.max_value.is_some() && self.kind == ChannelKind::F {
+            // exception for F
+            1.0 / self.max_value.as_ref().unwrap().to_float()
+        } else {
+            let ratio = match self.unit_resolution {
+                ResolutionUnits::OneOverCm => 1.0,
+                ResolutionUnits::OneOverMm => 0.1,
+                ResolutionUnits::OneOverDegree => 1.0,
+                ResolutionUnits::OneOverDev => 1.0,
+            };
+            ratio * (1.0 / self.resolution_value)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -331,11 +347,13 @@ impl Context {
         }
     }
 
-    pub fn pressure_channel_exist(&self) -> bool {
+    pub fn channel_exists(&self, channel_kind: ChannelKind) -> Option<usize> {
         self.channel_list
             .clone()
             .into_iter()
-            .any(|x| x.kind == ChannelKind::F)
+            .enumerate()
+            .find(|(_, x)| x.kind == channel_kind)
+            .map(|(index, _)| index)
     }
 }
 
