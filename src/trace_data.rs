@@ -57,9 +57,9 @@ impl ChannelDataEl {
 /// - Y as a float channel in cm unit
 /// - F as a float channel in dev unit (from 0.0 to 1.0)
 pub struct FormattedStroke {
-    pub X: Vec<f64>,
-    pub Y: Vec<f64>,
-    pub F: Vec<f64>,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+    pub f: Vec<f64>,
 }
 
 /// Type of modifier

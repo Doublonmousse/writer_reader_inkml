@@ -495,9 +495,9 @@ pub fn parse_formatted<T: Read>(buf_file: T) -> Result<Vec<(FormattedStroke, Bru
 
             formatted_result.push((
                 FormattedStroke {
-                    X: stroke.get(x_idx.unwrap()).unwrap().cast_to_float(x_ratio),
-                    Y: stroke.get(y_idx.unwrap()).unwrap().cast_to_float(y_ratio),
-                    F: if f_idx.is_some() {
+                    x: stroke.get(x_idx.unwrap()).unwrap().cast_to_float(x_ratio),
+                    y: stroke.get(y_idx.unwrap()).unwrap().cast_to_float(y_ratio),
+                    f: if f_idx.is_some() {
                         let f_ratio = context
                             .channel_list
                             .get(f_idx.unwrap())
