@@ -28,7 +28,7 @@ impl Brush {
             color: (0, 0, 0),
             stroke_width: 0.0,
             transparency: 0,
-            ignorepressure: true,
+            ignorepressure: false,
         }
     }
 }
