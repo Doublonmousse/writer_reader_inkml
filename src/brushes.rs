@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
 
+use crate::traits::Writable;
+
 #[derive(Debug)]
 pub struct Brush {
     /// name for the brush
@@ -61,9 +63,11 @@ impl Brush {
             ignorepressure: ignorepressure,
         }
     }
+}
 
+impl Writable for Brush {
     /// function to write the brush to the xml file
-    pub fn write_brush<W: Write>(self, writer: &mut EventWriter<W>) -> Result<(), Error> {
+    fn write<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), Error> {
         // add brush
         writer.write(XmlEvent::start_element("brush").attr("xml:id", &self.name))?;
 

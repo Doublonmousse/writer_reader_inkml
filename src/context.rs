@@ -5,12 +5,13 @@
 use crate::trace_data::ChannelDataEl;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
+use crate::traits::Writable;
 
 /// types of channel
 /// For now we allow X,Y only
 #[derive(Clone, PartialEq, Debug)]
 #[allow(unused)]
-pub(crate) enum ChannelKind {
+pub enum ChannelKind {
     /// X coordinates, left to right
     X,
     /// Y coordinates, high to bottom
@@ -81,7 +82,7 @@ impl From<ChannelKind> for String {
 #[derive(Clone, Debug)]
 #[allow(unused)]
 #[derive(Default)]
-pub(crate) enum ChannelType {
+pub enum ChannelType {
     Integer,
     #[default]
     Decimal,
@@ -149,7 +150,7 @@ impl ChannelType {
 #[derive(Clone, Debug)]
 #[allow(unused)]
 #[derive(Default)]
-pub(crate) enum ResolutionUnits {
+pub enum ResolutionUnits {
     // 1/cm
     #[default]
     OneOverCm,
@@ -336,8 +337,10 @@ impl Context {
             .into_iter()
             .any(|x| x.kind == ChannelKind::F)
     }
+}
 
-    pub fn write_context<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), Error> {
+impl Writable for Context {
+    fn write<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), Error> {
         // context block
         writer.write(XmlEvent::start_element("context").attr("xml:id", &self.name))?;
 
