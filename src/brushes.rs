@@ -1,4 +1,3 @@
-use crate::context::Context;
 use std::collections::HashMap;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
@@ -6,7 +5,9 @@ use xml::writer::{Error, EventWriter, XmlEvent};
 #[derive(Debug)]
 pub(crate) struct Brush {
     /// name for the brush
+    /// ```html
     /// <brush xml:id="name">
+    /// ```
     name: String,
     /// RGB triplet
     pub color: (u8, u8, u8),

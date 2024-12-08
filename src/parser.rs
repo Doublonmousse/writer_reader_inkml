@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::io::{Read, SeekFrom};
-use std::num::ParseFloatError;
+use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
 use crate::brushes::{Brush, BrushCollection};
