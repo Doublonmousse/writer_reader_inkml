@@ -407,14 +407,10 @@ impl Writable for Context {
         writer.write(XmlEvent::start_element("context").attr("xml:id", &self.name))?;
 
         // ink source
-        writer
-            .write(XmlEvent::start_element("inkSource").attr("xml:id", "inkSrc0"))
-            .unwrap();
+        writer.write(XmlEvent::start_element("inkSource").attr("xml:id", "inkSrc0"))?;
 
         // trace format
-        writer
-            .write(XmlEvent::start_element("traceFormat"))
-            .unwrap();
+        writer.write(XmlEvent::start_element("traceFormat"))?;
 
         // iterate over channels
         for channel in &self.channel_list {
