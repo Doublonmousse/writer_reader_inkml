@@ -1,10 +1,19 @@
-use crate::brushes::Brush;
+use crate::brushes::BrushCollection;
 use crate::context::Context;
 use crate::traits::Writable;
-use std::{f32::consts::PI, io};
+use crate::{brushes::Brush, trace_data::FormattedStroke};
+#[cfg(feature = "clipboard")]
+use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
+use std::io;
 use xml::writer::{EmitterConfig, XmlEvent};
 
-pub fn writer() -> io::Result<()> {
+pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>> {
+    // create brushes
+    let mut brush_collection = BrushCollection::default();
+    for (_, brush) in &stroke_data {
+        brush_collection.add_brush(brush);
+    }
+
     let mut out_v: Vec<u8> = vec![];
     let mut writer = EmitterConfig::new()
         .perform_indent(false)
@@ -28,67 +37,37 @@ pub fn writer() -> io::Result<()> {
         .write(XmlEvent::start_element("definitions"))
         .unwrap();
 
-    let context = Context::default();
+    let context = Context::default_with_pressure();
     context.write(&mut writer).unwrap();
 
-    // collect brushes
-
-    // for now one brush
-    let brush = Brush::init(
-        String::from("br1"),
-        (255, 255, 12),
-        !&context
-            .channel_exists(crate::context::ChannelKind::F)
-            .is_some(),
-        125,
-        0.2,
-    );
-    // write brushes
-    brush.write(&mut writer).unwrap();
-
+    // write all brushes
+    for (_, brush) in brush_collection.brushes() {
+        brush.write(&mut writer).unwrap();
+    }
     writer.write(XmlEvent::end_element()).unwrap(); // end definitions
 
     // iterate over strokes
     //add trace element with some contextRef and brushRef
     // we also need to iterate on positions + convert with the correct
     // value (depending on resolution and units for source and end !)
-    writer
-        .write(
-            XmlEvent::start_element("trace")
-                .attr("contextRef", "#ctx0")
-                .attr("brushRef", "#br1"),
-        )
-        .unwrap();
 
-    // generate some data here
-    let positions: Vec<(f32, f32)> = (1..10)
-        .map(|x| {
-            (
-                (f32::sin(2.0 * PI * (x as f32) / 10.0) + 2.0) * 1000.0,
-                (f32::cos(2.0 * PI * (x as f32) / 10.0) + 2.0) * 1000.0,
+    for ((formatted_stroke, _), brush_id) in stroke_data.into_iter().zip(brush_collection.mapping())
+    {
+        // we are using the NEW brush id here
+        writer
+            .write(
+                XmlEvent::start_element("trace")
+                    .attr("contextRef", format!("#{}", context.name).as_str())
+                    .attr("brushRef", format!("#{}", brush_id).as_str()),
             )
-        })
-        .collect();
+            .unwrap();
 
-    let mut string_out = positions
-        .into_iter()
-        .fold(String::from("#"), |acc, (x, y)| {
-            acc + &format!("{:.} {:.},", x.round(), y.round())
-        });
-    string_out = string_out[1..string_out.len() - 1].to_string();
+        formatted_stroke.write(&mut writer).unwrap();
+    }
 
-    // for now this is very basic !
-    // we should go through the strokes to
-    // add our data
-    writer.write(XmlEvent::characters(&string_out)).unwrap();
-
-    writer.write(XmlEvent::end_element()).unwrap(); //end
     writer.write(XmlEvent::end_element()).unwrap(); // end ink
 
-    // collect everything
-    println!("Hello, {:?}", String::from_utf8(out_v.clone()));
-
-    // copy to clipboard
+    // copy to clipboard (for testing purposes only)
     #[cfg(feature = "clipboard")]
     {
         let mimetype = String::from("InkML Format");
@@ -97,5 +76,5 @@ pub fn writer() -> io::Result<()> {
         let ctx = ClipboardContext::new().unwrap();
         let _ = ctx.set(content);
     }
-    Ok(())
+    Ok(out_v)
 }

@@ -1,9 +1,7 @@
-#[cfg(feature = "clipboard")]
-use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
-
+use brushes::Brush;
 use std::fs::File;
 use std::io::BufReader;
-
+use trace_data::FormattedStroke;
 mod brushes;
 mod context;
 mod parser;
@@ -19,10 +17,11 @@ fn main() {
     //parser stage
     let paths = vec![
         "test_files/onenote_multiple_contexts.xml",
-        //"test_files/correct.xml",
-        //"test_files/journal_output.xml",
-        //"test_files/10065.inkml",
-        //"test_files/highlighter_onenote.xml",
+        "test_files/correct.xml",
+        "test_files/journal_output.xml",
+        "test_files/10065.inkml",
+        "test_files/highlighter_onenote.xml",
+        "test_files/onenote_web.xml",
     ];
 
     for path in paths {
@@ -39,5 +38,13 @@ fn main() {
     }
 
     // writer stage
-    writer().unwrap();
+    let data = vec![(
+        FormattedStroke {
+            x: vec![0.0, 1.0],
+            y: vec![0.0, 1.0],
+            f: vec![0.0, 1.0],
+        },
+        Brush::init(String::from("hello"), (0, 1, 0), true, 150, 10.0),
+    )];
+    writer(data).unwrap();
 }

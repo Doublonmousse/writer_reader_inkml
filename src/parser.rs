@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
 
-use crate::brushes::{Brush, BrushCollection};
+use crate::brushes::Brush;
 use crate::context::{Channel, ChannelKind, ChannelType, ChannelUnit, Context, ResolutionUnits};
 use crate::trace_data::FormattedStroke;
 use crate::trace_data::{ChannelData, TraceData};
@@ -193,12 +193,10 @@ pub fn parser<T: Read>(
                         // get the current brush
                         let current_brush = match parser_context.current_brush_id {
                             None => return Err(()),
-                            Some(ref key) => {
-                                match parser_context.brushes.get_mut(&key.clone()) {
-                                    Some(current) => current,
-                                    None => return Err(()),
-                                }
-                            }
+                            Some(ref key) => match parser_context.brushes.get_mut(&key.clone()) {
+                                Some(current) => current,
+                                None => return Err(()),
+                            },
                         };
 
                         match property_name_opt {
@@ -269,8 +267,14 @@ pub fn parser<T: Read>(
                                         match get_id(&attributes, String::from("value")) {
                                             None => return Err(()),
                                             Some(value_str) => {
-                                                current_brush.transparency =
-                                                    value_str.parse::<u8>().map_err(|_| ())?;
+                                                // workaround to make it work with
+                                                // this https://devblogs.microsoft.com/microsoft365dev/onenote-ink-beta-apis/
+                                                // with transparency between 0 and 256 !!
+                                                current_brush.transparency = value_str
+                                                    .parse::<u16>()
+                                                    .map_err(|_| ())?
+                                                    .clamp(0, u8::MAX.into())
+                                                    as u8;
                                             }
                                         }
                                     }
@@ -278,10 +282,10 @@ pub fn parser<T: Read>(
                                         let value = get_id(&attributes, String::from("value"));
                                         match value {
                                             Some(bool_str) => match bool_str.as_str() {
-                                                "1" => {
+                                                "1" | "true" => {
                                                     current_brush.ignorepressure = true;
                                                 }
-                                                "0" => {
+                                                "0" | "false" => {
                                                     current_brush.ignorepressure = false;
                                                 }
                                                 _ => return Err(()),
@@ -381,11 +385,10 @@ pub fn parser<T: Read>(
                     match parser_context.current_brush_id {
                         None => return Err(()),
                         Some(current_key) => {
-                            let current_brush =
-                                match parser_context.brushes.get_mut(&current_key) {
-                                    Some(brush) => brush,
-                                    None => return Err(()),
-                                };
+                            let current_brush = match parser_context.brushes.get_mut(&current_key) {
+                                Some(brush) => brush,
+                                None => return Err(()),
+                            };
                             if current_brush.stroke_width == 0.0 {
                                 current_brush.stroke_width = 0.1;
                             }
@@ -420,9 +423,7 @@ pub fn parser<T: Read>(
 
                     if (parser_context.current_brush_id.is_none())
                         && (parser_context.brushes.is_empty()
-                            || parser_context
-                                .brushes
-                                .contains_key(&String::from("br0")))
+                            || parser_context.brushes.contains_key(&String::from("br0")))
                     {
                         if parser_context.brushes.is_empty() {
                             // no brush was defined. We add a default brush

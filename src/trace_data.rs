@@ -4,7 +4,8 @@
 // even if these are default values
 // From the context we can define what the format of the data is
 
-use crate::context::ChannelType;
+use crate::{context::ChannelType, traits::Writable};
+use xml::writer::XmlEvent;
 
 /// polymorphic enum to hold the data from a trace before a resolution conversion
 #[derive(Debug, Clone)]
@@ -51,6 +52,16 @@ impl ChannelDataEl {
     }
 }
 
+impl From<ChannelDataEl> for String {
+    fn from(value: ChannelDataEl) -> Self {
+        match value {
+            ChannelDataEl::Bool => String::from("1"),
+            ChannelDataEl::Double(value) => format!("{value}"),
+            ChannelDataEl::Integer(value) => format!("{value}"),
+        }
+    }
+}
+
 #[derive(Debug)]
 /// Type to hold a formatted stroke data
 /// - X as a float channel in cm unit
@@ -60,6 +71,36 @@ pub struct FormattedStroke {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
     pub f: Vec<f64>,
+}
+
+impl Writable for FormattedStroke {
+    fn write<W: std::io::Write>(
+        &self,
+        writer: &mut xml::EventWriter<W>,
+    ) -> Result<(), xml::writer::Error> {
+        // rem : we suppose that the context is the default with pressure one
+        // So resolution of 1000 of 1/cm in integer and
+        // F in dev unit between 0 and 32767
+
+        let string_out =
+            self.x
+                .iter()
+                .zip(&self.y)
+                .zip(&self.f)
+                .fold(String::from(""), |acc, ((x, y), f)| {
+                    let x_int = (x * 1000.0) as u64;
+                    let y_int = (y * 1000.0) as u64;
+                    let f_int = (f * 32767.0) as u64;
+
+                    acc + &format!("{x_int} {y_int} {f_int},")
+                });
+
+        writer.write(XmlEvent::characters(&string_out[0..string_out.len() - 1]))?;
+
+        writer.write(XmlEvent::end_element())?;
+
+        Ok(())
+    }
 }
 
 /// Type of modifier

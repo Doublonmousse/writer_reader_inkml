@@ -161,6 +161,8 @@ pub enum ResolutionUnits {
     OneOverDev,
     // 1/deg, degree
     OneOverDegree,
+    // 1/himetric
+    OneOverHimetric,
 }
 
 impl From<ResolutionUnits> for String {
@@ -170,6 +172,7 @@ impl From<ResolutionUnits> for String {
             ResolutionUnits::OneOverMm => String::from("1/mm"),
             ResolutionUnits::OneOverDev => String::from("1/dev"),
             ResolutionUnits::OneOverDegree => String::from("1/deg"),
+            ResolutionUnits::OneOverHimetric => String::from("1/himetric"),
         }
     }
 }
@@ -182,6 +185,7 @@ impl ResolutionUnits {
                 "1/mm" => Ok(ResolutionUnits::OneOverMm),
                 "1/dev" => Ok(ResolutionUnits::OneOverDev),
                 "1/deg" => Ok(ResolutionUnits::OneOverDegree),
+                "1/himetric" => Ok(ResolutionUnits::OneOverHimetric),
                 _ => Err(()),
             },
             None => Err(()),
@@ -205,6 +209,8 @@ pub(crate) enum ChannelUnit {
     dev,
     /// degree
     deg,
+    /// himetric
+    himetric,
 }
 
 impl From<ChannelUnit> for String {
@@ -215,6 +221,7 @@ impl From<ChannelUnit> for String {
             ChannelUnit::m => String::from("m"),
             ChannelUnit::dev => String::from("dev"),
             ChannelUnit::deg => String::from("deg"),
+            ChannelUnit::himetric => String::from("himetric"),
         }
     }
 }
@@ -228,6 +235,7 @@ impl ChannelUnit {
                 "m" => Some(ChannelUnit::m),
                 "dev" => Some(ChannelUnit::dev),
                 "deg" => Some(ChannelUnit::deg),
+                "himetric" => Some(ChannelUnit::himetric),
                 _ => None,
             },
             None => None,
@@ -248,6 +256,9 @@ impl ChannelUnit {
             (ChannelUnit::m, ChannelUnit::m) => Ok(input_value),
             (ChannelUnit::deg, ChannelUnit::deg) => Ok(input_value),
             (ChannelUnit::dev, ChannelUnit::dev) => Ok(input_value),
+            (ChannelUnit::himetric, ChannelUnit::cm) => Ok(input_value * 1e-3),
+            (ChannelUnit::himetric, ChannelUnit::mm) => Ok(input_value * 1e-2),
+            (ChannelUnit::himetric, ChannelUnit::m) => Ok(input_value * 1e-5),
             _ => Err(()),
         }
     }
@@ -296,6 +307,7 @@ impl Channel {
                 ResolutionUnits::OneOverMm => 0.1,
                 ResolutionUnits::OneOverDegree => 1.0,
                 ResolutionUnits::OneOverDev => 1.0,
+                ResolutionUnits::OneOverHimetric => 1.0 / 1000.0,
             };
             ratio * (1.0 / self.resolution_value)
         }
@@ -340,6 +352,38 @@ impl Default for Context {
 }
 
 impl Context {
+    pub(crate) fn default_with_pressure() -> Context {
+        Context {
+            name: String::from("ctx0"),
+            channel_list: vec![
+                Channel {
+                    kind: ChannelKind::X,
+                    types: ChannelType::Integer,
+                    resolution_value: 1000.0,
+                    max_value: None,
+                    unit_resolution: ResolutionUnits::OneOverCm,
+                    unit_channel: ChannelUnit::cm,
+                },
+                Channel {
+                    kind: ChannelKind::Y,
+                    types: ChannelType::Integer,
+                    resolution_value: 1000.0,
+                    max_value: None,
+                    unit_resolution: ResolutionUnits::OneOverCm,
+                    unit_channel: ChannelUnit::cm,
+                },
+                Channel {
+                    kind: ChannelKind::F,
+                    types: ChannelType::Integer,
+                    resolution_value: 0.0,
+                    max_value: Some(ChannelDataEl::Integer(32767)),
+                    unit_resolution: ResolutionUnits::OneOverDev,
+                    unit_channel: ChannelUnit::dev,
+                },
+            ],
+        }
+    }
+
     pub fn create_empty(name: String) -> Context {
         Context {
             name,
@@ -374,12 +418,25 @@ impl Writable for Context {
 
         // iterate over channels
         for channel in &self.channel_list {
-            writer.write(
-                XmlEvent::start_element("channel")
-                    .attr("name", &String::from(channel.kind.clone()))
-                    .attr("type", &String::from(channel.types.clone()))
-                    .attr("unit", &String::from(channel.unit_channel.clone())),
-            )?;
+            if channel.max_value.is_some() {
+                writer.write(
+                    XmlEvent::start_element("channel")
+                        .attr("name", &String::from(channel.kind.clone()))
+                        .attr("type", &String::from(channel.types.clone()))
+                        .attr(
+                            "max",
+                            &String::from(channel.max_value.as_ref().unwrap().clone()),
+                        )
+                        .attr("unit", &String::from(channel.unit_channel.clone())),
+                )?;
+            } else {
+                writer.write(
+                    XmlEvent::start_element("channel")
+                        .attr("name", &String::from(channel.kind.clone()))
+                        .attr("type", &String::from(channel.types.clone()))
+                        .attr("unit", &String::from(channel.unit_channel.clone())),
+                )?;
+            }
             writer.write(XmlEvent::end_element())?;
         }
         writer.write(XmlEvent::end_element())?; // end trace format

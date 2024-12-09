@@ -76,7 +76,7 @@ pub(crate) struct BrushCollection {
 }
 
 impl BrushCollection {
-    fn add_brush(mut self, brush: Brush) {
+    pub(crate) fn add_brush(&mut self, brush: &Brush) {
         let duplicate_key = (
             brush.color,
             PositiveFiniteFloat::new(brush.stroke_width),
@@ -93,8 +93,19 @@ impl BrushCollection {
             self.duplicate_search.insert(duplicate_key, id.clone());
 
             // push to brushes
-            self.brushes.insert(id, brush);
+            // edit the brush to take the new unique id
+            let mut new_brush = brush.clone();
+            new_brush.name = id.clone();
+            self.brushes.insert(id, new_brush);
         };
+    }
+
+    pub(crate) fn brushes(&self) -> HashMap<String, Brush> {
+        self.brushes.clone()
+    }
+
+    pub(crate) fn mapping(&self) -> Vec<String> {
+        self.mapping.clone()
     }
 }
 
@@ -148,22 +159,15 @@ impl Writable for Brush {
                 ),
         )?;
         writer.write(XmlEvent::end_element())?;
-        // transparency doesn't seem to work well on export
-        // so we reserve the field for import only for now
-        // if self.transparency > 0 {
-        //     writer.write(
-        //         XmlEvent::start_element("brushProperty")
-        //             .attr("name", "transparency")
-        //             .attr("value", &format!("{:?}", self.transparency)),
-        //     )?;
-        //     writer.write(XmlEvent::end_element())?;
-        //     writer.write(
-        //         XmlEvent::start_element("brushProperty")
-        //             .attr("name", "tip")
-        //             .attr("value", "rectangle"),
-        //     )?;
-        //     writer.write(XmlEvent::end_element())?;
-        // }
+        // transparency work but only with colors != 0,0,0
+        if self.transparency > 0 && self.color != (0, 0, 0) {
+            writer.write(
+                XmlEvent::start_element("brushProperty")
+                    .attr("name", "transparency")
+                    .attr("value", &format!("{:?}", self.transparency)),
+            )?;
+            writer.write(XmlEvent::end_element())?;
+        }
 
         if self.ignorepressure {
             writer.write(
