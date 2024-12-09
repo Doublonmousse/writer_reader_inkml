@@ -5,7 +5,6 @@ use std::{f32::consts::PI, io};
 use xml::writer::{EmitterConfig, XmlEvent};
 
 pub fn writer() -> io::Result<()> {
-    // let output = io::stdout();
     let mut out_v: Vec<u8> = vec![];
     let mut writer = EmitterConfig::new()
         .perform_indent(false)

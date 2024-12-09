@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::io::Write;
+use std::{collections::HashMap, hash::Hash};
 use xml::writer::{Error, EventWriter, XmlEvent};
 
 use crate::traits::Writable;
@@ -33,18 +33,69 @@ impl Brush {
     }
 }
 
+#[derive(PartialEq, Debug)]
+pub struct PositiveFiniteFloat {
+    stroke_width: f64,
+}
+
+impl PositiveFiniteFloat {
+    fn new(stroke_width: f64) -> PositiveFiniteFloat {
+        PositiveFiniteFloat {
+            stroke_width: if stroke_width.is_finite() {
+                stroke_width
+            } else {
+                0.0
+            },
+        }
+    }
+}
+
+impl Eq for PositiveFiniteFloat {} // works because we guarantee the value is finite
+
+impl Hash for PositiveFiniteFloat {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.stroke_width.to_bits().hash(state);
+    }
+}
+
 /// We iterate over the strokes and construct a collection of brushes
 /// so that we have the lowest number of brushes used
 ///
 /// This means we have to create a mapping from a list of strokes to brushes
 /// and create a growing collection of brush so that no one brush is repeated
 /// twice
-///
-/// For now this isn't very useful. Depending on what we add to this structure
-/// we may have some more efficient ways to make sure a brush doesn't already exist
 #[derive(Default, Debug)]
 pub(crate) struct BrushCollection {
-    pub brushes: HashMap<String, Brush>,
+    /// Brush collection (dictionnary on brush indexed by the brush id)
+    brushes: HashMap<String, Brush>,
+    /// Called with color, stroke width, ignorepressure and transparency, gives
+    /// the id corresponding to this value
+    duplicate_search: HashMap<((u8, u8, u8), PositiveFiniteFloat, bool, u8), String>,
+    /// Memorizes the brush id given for each call wanting to add a brush
+    mapping: Vec<String>,
+}
+
+impl BrushCollection {
+    fn add_brush(mut self, brush: Brush) {
+        let duplicate_key = (
+            brush.color,
+            PositiveFiniteFloat::new(brush.stroke_width),
+            brush.ignorepressure,
+            brush.transparency,
+        );
+
+        if self.duplicate_search.get(&duplicate_key).is_none() {
+            // get the id
+            let id = format!("br{}", self.brushes.len() + 1);
+            self.mapping.push(id.clone());
+
+            // push to duplicate search
+            self.duplicate_search.insert(duplicate_key, id.clone());
+
+            // push to brushes
+            self.brushes.insert(id, brush);
+        };
+    }
 }
 
 impl Brush {
@@ -98,7 +149,7 @@ impl Writable for Brush {
         )?;
         writer.write(XmlEvent::end_element())?;
         // transparency doesn't seem to work well on export
-        // so we reserve the field for import only
+        // so we reserve the field for import only for now
         // if self.transparency > 0 {
         //     writer.write(
         //         XmlEvent::start_element("brushProperty")

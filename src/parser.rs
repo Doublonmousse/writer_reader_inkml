@@ -26,7 +26,7 @@ struct ParserContext {
     current_context_id: Option<String>,
     start_context_element: Option<ContextStartElement>,
     current_brush_id: Option<String>,
-    brushes: BrushCollection,
+    brushes: HashMap<String, Brush>,
 }
 
 /// This function returns the raw data from the trace
@@ -175,14 +175,13 @@ pub fn parser<T: Read>(
                         println!("brush id {:?}", brush_id);
 
                         parser_context.current_brush_id = Some(brush_id.clone());
-                        if parser_context.brushes.brushes.contains_key(&brush_id) {
+                        if parser_context.brushes.contains_key(&brush_id) {
                             return Err(());
                             // we cannot have twice the same brush id
                         } else {
                             // we init the brush with default parameters
                             // this also allows the default parameter to serve as a fallback (except for the stroke width)
                             parser_context
-                                .brushes
                                 .brushes
                                 .insert(brush_id.clone(), Brush::init_brush_with_id(&brush_id));
                         }
@@ -195,7 +194,7 @@ pub fn parser<T: Read>(
                         let current_brush = match parser_context.current_brush_id {
                             None => return Err(()),
                             Some(ref key) => {
-                                match parser_context.brushes.brushes.get_mut(&key.clone()) {
+                                match parser_context.brushes.get_mut(&key.clone()) {
                                     Some(current) => current,
                                     None => return Err(()),
                                 }
@@ -322,7 +321,7 @@ pub fn parser<T: Read>(
                         parser_context.current_brush_id = match &ids[1] {
                             Some(candidate_with_hash) => {
                                 let candidate = candidate_with_hash.clone().replace("#", "");
-                                if !parser_context.brushes.brushes.contains_key(&candidate) {
+                                if !parser_context.brushes.contains_key(&candidate) {
                                     return Err(());
                                 }
                                 Some(candidate)
@@ -332,9 +331,9 @@ pub fn parser<T: Read>(
                                 // - zero brush exist : init of the default one latser
                                 // - one brush only exist
                                 // can we have no brush and need to define a default brush ? not the case for office inkml files .
-                                match parser_context.brushes.brushes.len() {
+                                match parser_context.brushes.len() {
                                     0 => None,
-                                    1 => parser_context.brushes.brushes.keys().next().cloned(),
+                                    1 => parser_context.brushes.keys().next().cloned(),
                                     _ => return Err(()),
                                 }
                             }
@@ -383,7 +382,7 @@ pub fn parser<T: Read>(
                         None => return Err(()),
                         Some(current_key) => {
                             let current_brush =
-                                match parser_context.brushes.brushes.get_mut(&current_key) {
+                                match parser_context.brushes.get_mut(&current_key) {
                                     Some(brush) => brush,
                                     None => return Err(()),
                                 };
@@ -420,15 +419,14 @@ pub fn parser<T: Read>(
                     trace_data.parse_raw_data(string_out)?;
 
                     if (parser_context.current_brush_id.is_none())
-                        && (parser_context.brushes.brushes.is_empty()
+                        && (parser_context.brushes.is_empty()
                             || parser_context
-                                .brushes
                                 .brushes
                                 .contains_key(&String::from("br0")))
                     {
-                        if parser_context.brushes.brushes.is_empty() {
+                        if parser_context.brushes.is_empty() {
                             // no brush was defined. We add a default brush
-                            parser_context.brushes.brushes.insert(
+                            parser_context.brushes.insert(
                                 String::from("br0"),
                                 Brush::init(String::from("br0"), (255, 255, 255), true, 0, 0.1),
                             );
@@ -455,7 +453,7 @@ pub fn parser<T: Read>(
     Ok((
         trace_collect,
         parser_context.context,
-        parser_context.brushes.brushes,
+        parser_context.brushes,
     ))
 }
 
