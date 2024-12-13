@@ -11,3 +11,5 @@ mod writer;
 pub use parser::parser;
 pub use parser::parse_formatted;
 pub use writer::writer;
+pub use trace_data::FormattedStroke;
+pub use brushes::Brush;
