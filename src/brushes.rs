@@ -141,15 +141,15 @@ impl Writable for Brush {
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "width")
-                .attr("value", &format!("{}", self.stroke_width))
-                .attr("units", "mm"),
+                .attr("value", &format!("{}", self.stroke_width*10.0))
+                .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "height")
-                .attr("value", &format!("{}", self.stroke_width))
-                .attr("units", "mm"),
+                .attr("value", &format!("{}", self.stroke_width*10.0))
+                .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;
         writer.write(
