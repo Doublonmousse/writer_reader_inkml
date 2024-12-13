@@ -84,20 +84,25 @@ impl BrushCollection {
             brush.transparency,
         );
 
-        if self.duplicate_search.get(&duplicate_key).is_none() {
-            // get the id
-            let id = format!("br{}", self.brushes.len() + 1);
-            self.mapping.push(id.clone());
+        match self.duplicate_search.get(&duplicate_key) {
+            None => {
+                // get the id
+                let id = format!("br{}", self.brushes.len() + 1);
+                self.mapping.push(id.clone());
 
-            // push to duplicate search
-            self.duplicate_search.insert(duplicate_key, id.clone());
+                // push to duplicate search
+                self.duplicate_search.insert(duplicate_key, id.clone());
 
-            // push to brushes
-            // edit the brush to take the new unique id
-            let mut new_brush = brush.clone();
-            new_brush.name = id.clone();
-            self.brushes.insert(id, new_brush);
-        };
+                // push to brushes
+                // edit the brush to take the new unique id
+                let mut new_brush = brush.clone();
+                new_brush.name = id.clone();
+                self.brushes.insert(id, new_brush);
+            }
+            Some(id) => {
+                self.mapping.push(id.clone());
+            }
+        }
     }
 
     pub(crate) fn brushes(&self) -> HashMap<String, Brush> {
