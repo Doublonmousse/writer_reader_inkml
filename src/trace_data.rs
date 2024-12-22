@@ -5,6 +5,7 @@
 // From the context we can define what the format of the data is
 
 use crate::{context::ChannelType, traits::Writable};
+use anyhow::anyhow;
 use xml::writer::XmlEvent;
 
 /// polymorphic enum to hold the data from a trace before a resolution conversion
@@ -18,16 +19,12 @@ pub enum ChannelData {
 impl ChannelData {
     pub(crate) fn cast_to_float(&self, scaling: f64) -> Vec<f64> {
         match self {
-            ChannelData::Integer(int_vec) => {
-                int_vec.into_iter().map(|x| *x as f64 * scaling).collect()
-            }
+            ChannelData::Integer(int_vec) => int_vec.iter().map(|x| *x as f64 * scaling).collect(),
             ChannelData::Bool(bool_vec) => bool_vec
-                .into_iter()
+                .iter()
                 .map(|x| (if *x { 1.0 } else { 0.0 }) * scaling)
                 .collect(),
-            ChannelData::Double(double_vec) => {
-                double_vec.into_iter().map(|x| x * scaling).collect()
-            }
+            ChannelData::Double(double_vec) => double_vec.iter().map(|x| x * scaling).collect(),
         }
     }
 }
@@ -162,7 +159,7 @@ impl TraceData {
         }
     }
 
-    pub fn parse_raw_data(&mut self, line_str: String) -> Result<(), ()> {
+    pub fn parse_raw_data(&mut self, line_str: String) -> anyhow::Result<()> {
         //line_str : ex '37'-40'1680'0'0
         // one element from the trace string after
         // splitting per ,
@@ -177,7 +174,7 @@ impl TraceData {
             self.new_modifier = *self
                 .last_value_modifiers
                 .get(self.index_channel)
-                .ok_or(())?;
+                .ok_or(anyhow!(""))?;
             while self.index_channel < self.last_value_modifiers.len() {
                 match iterator.next() {
                     Some((_, next_char)) => {
@@ -214,14 +211,14 @@ impl TraceData {
                                 if self.is_value_found {
                                     // if two values are concatenated with no space in between
                                     // parse the value up till now
-                                    self.push_found_value()?; //bug here ?
+                                    self.push_found_value()?;
                                     self.is_value_found = true;
 
                                     // then restart
                                     self.new_modifier = *self
                                         .last_value_modifiers
                                         .get(self.index_channel)
-                                        .ok_or(())?;
+                                        .ok_or(anyhow!("Could not find the last value modified for the current channel"))?;
                                     // we should verify the index here
                                     self.value_str.push(next_char);
                                 } else {
@@ -235,7 +232,7 @@ impl TraceData {
                                 self.value_str.push(next_char);
                                 self.push_found_value()?;
                             }
-                            _ => return Err(()),
+                            _ => return Err(anyhow!("Unexpected char {next_char} found")),
                         }
                     }
                     None => {
@@ -244,7 +241,7 @@ impl TraceData {
                         if self.is_value_found {
                             self.push_found_value()?;
                         } else {
-                            return Err(());
+                            return Err(anyhow!("Unexpected end. Expected more data before the end of the current trace"));
                             // we have exhausted the whole line before
                             // parsing all channel data ...
                             // Remark : needed so that we never loop forever
@@ -261,8 +258,10 @@ impl TraceData {
                 match next_char {
                     ' ' | '\r' | '\n' | '\t' => {}
                     _ => {
-                        println!("char not expected {:?}", next_char);
-                        return Err(()); //there was something left ...
+                        return Err(anyhow!(
+                            "char not expected {:?}, we only expected space-like elements",
+                            next_char
+                        )); //there was something left ...
                     }
                 }
             }
@@ -275,7 +274,7 @@ impl TraceData {
         Ok(())
     }
 
-    fn push_found_value(&mut self) -> Result<(), ()> {
+    fn push_found_value(&mut self) -> anyhow::Result<()> {
         // parse the value
         // debug trace
         // println!(
@@ -284,7 +283,11 @@ impl TraceData {
         // );
 
         // push to the corresponding channel
-        match &mut self.data.get_mut(self.index_channel).ok_or(())? {
+        match &mut self
+            .data
+            .get_mut(self.index_channel)
+            .ok_or(anyhow!("Could not find the current channel"))?
+        {
             ChannelData::Integer(current) => {
                 let parsed_value = self.value_str.parse::<i64>();
                 // println!(
@@ -297,7 +300,9 @@ impl TraceData {
                             current.push(value);
                         }
                         ValueModifier::SingleDifference => {
-                            let previous = current.last().ok_or(())?;
+                            let previous = current.last().ok_or(anyhow!("could not find the previous value for the channel. 
+                                                                                    This is unexpected as we found a single difference modifier, 
+                                                                                    so the value is the previous one + the current values"))?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -306,11 +311,17 @@ impl TraceData {
                                         ChannelDataEl::Integer(last_difference + value);
                                     current.push(value + previous);
                                 }
-                                _ => return Err(()),
+                                _ => {
+                                    return Err(anyhow!(
+                                        "The saved previous element for the channel is incorrect."
+                                    ))
+                                }
                             }
                         }
                         ValueModifier::DoubleDifference => {
-                            let previous = current.last().ok_or(())?;
+                            let previous = current.last().ok_or(anyhow!("Could not find the previous value for the channel.
+                                                                            This is unexpected as we found a double difference modifier
+                                                                            so the value is calculated relative to the previous one"))?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -319,12 +330,16 @@ impl TraceData {
                                         ChannelDataEl::Integer(last_difference + value);
                                     current.push(value + previous + last_difference);
                                 }
-                                _ => return Err(()),
+                                _ => {
+                                    return Err(anyhow!(
+                                        "The saved previous element for the channel is incorrect"
+                                    ))
+                                }
                             }
                         }
                     },
-                    Err(_) => {
-                        return Err(());
+                    Err(e) => {
+                        return Err(anyhow!("{e} : Could not parse the value as int"));
                     }
                 }
             }
@@ -341,7 +356,11 @@ impl TraceData {
                             current.push(value);
                         }
                         ValueModifier::SingleDifference => {
-                            let previous = current.last().ok_or(())?;
+                            let previous = current.last().ok_or(anyhow!(
+                                "could not find the previous value for the channel. 
+                            This is unexpected as we found a single difference modifier, 
+                            so the value is the previous one + the current values"
+                            ))?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -350,11 +369,19 @@ impl TraceData {
                                         ChannelDataEl::Double(last_difference + value);
                                     current.push(value + previous);
                                 }
-                                _ => return Err(()),
+                                _ => {
+                                    return Err(anyhow!(
+                                        "The saved previous element for the channel is incorrect"
+                                    ))
+                                }
                             }
                         }
                         ValueModifier::DoubleDifference => {
-                            let previous = current.last().ok_or(())?;
+                            let previous = current.last().ok_or(anyhow!(
+                                "could not find the previous value for the channel. 
+                            This is unexpected as we found a single difference modifier, 
+                            so the value is the previous one + the current values"
+                            ))?;
                             let last_difference_container =
                                 self.last_value_difference[self.index_channel].clone();
                             match last_difference_container {
@@ -363,12 +390,16 @@ impl TraceData {
                                         ChannelDataEl::Double(last_difference + value);
                                     current.push(value + previous + last_difference);
                                 }
-                                _ => return Err(()),
+                                _ => {
+                                    return Err(anyhow!(
+                                        "The saved previous element for the channel is incorrect"
+                                    ))
+                                }
                             }
                         }
                     },
-                    Err(_) => {
-                        return Err(());
+                    Err(e) => {
+                        return Err(anyhow!("{e} : Could not parse to float"));
                     }
                 }
             }
@@ -391,7 +422,12 @@ impl TraceData {
                     Ok(bool_value) => {
                         current.push(bool_value);
                     }
-                    Err(_) => return Err(()),
+                    Err(_) => {
+                        return Err(anyhow!(
+                            "Could not parse to bool the value {:?}",
+                            self.value_str
+                        ))
+                    }
                 }
             }
         }

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::io::Read;
 use xml::reader::{EventReader, XmlEvent as rXmlEvent};
@@ -29,20 +30,25 @@ struct ParserContext {
     brushes: HashMap<String, Brush>,
 }
 
+#[derive(Debug)]
+pub struct ParserResult {
+    /// Each element contains
+    /// - The name of the context
+    /// - The name of the brush
+    /// - The (raw) channel data associated with it.
+    ///   In particular this raw channel data
+    ///     - Keeps the same order as the one given in the trace
+    ///     - Keeps the same type (integer, boolean or double) as the
+    ///       one given in the trace definition
+    context_brush_data_vec: Vec<(String, String, Vec<ChannelData>)>,
+    context_dict: HashMap<String, Context>,
+    context_brush: HashMap<String, Brush>,
+}
+
 /// This function returns the raw data from the trace
 /// Hence all supported channels with their origin types are
 /// returned, with corresponding resolution, brush properties and so on
-pub fn parser<T: Read>(
-    buf_file: T,
-) -> Result<
-    (
-        // maybe we should set a ParserResult apart for this
-        Vec<(String, String, Vec<ChannelData>)>,
-        HashMap<String, Context>,
-        HashMap<String, Brush>,
-    ),
-    (),
-> {
+pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
     let parser = EventReader::new(buf_file);
     let mut parser_context = ParserContext::default();
 
@@ -70,7 +76,7 @@ pub fn parser<T: Read>(
                             parser_context.start_context_element =
                                 Some(ContextStartElement::Context);
                         } else {
-                            return Err(());
+                            return Err(anyhow!("could not create the context"));
                         }
                     }
                     "inkSource" => {
@@ -110,7 +116,7 @@ pub fn parser<T: Read>(
                             parser_context
                                 .context
                                 .get_mut(current_context)
-                                .ok_or(())?
+                                .ok_or(anyhow!("Could not add the channel to the current context, as it was not found"))?
                                 .channel_list
                                 .push(Channel::initialise_channel_from_name(ids)?);
                         }
@@ -147,20 +153,24 @@ pub fn parser<T: Read>(
                             let resolution_units = ResolutionUnits::parse(&ids[3])?;
                             let value = &ids[2].clone().unwrap().parse::<f64>();
                             if value.is_err() {
-                                return Err(());
+                                return Err(anyhow!("ParseFloatError: could not parse the value property to a float"));
                             }
 
                             // find the index
-                            let index = current_context.channel_list.iter().enumerate().fold(
-                                Err(()),
+                            let index = match current_context.channel_list.iter().enumerate().fold(None,
                                 |acc, (index, channel_el)| {
                                     if channel_el.kind == channel_kind {
-                                        Ok(index)
+                                        Some(index)
                                     } else {
                                         acc
-                                    }
-                                },
-                            )?;
+                                    }}) {
+                                Some(index) => index,
+                                None => {
+                                    return Err(anyhow!("Could not find the channel in the list. Searching for {:?}, not present in the list of channels: {:?}", channel_kind,
+                                    current_context.channel_list.iter().map(|x| x.kind.clone())))
+                                }
+                            };
+
                             let channel_to_update =
                                 current_context.channel_list.get_mut(index).unwrap();
                             channel_to_update.resolution_value = value.clone().unwrap();
@@ -176,7 +186,9 @@ pub fn parser<T: Read>(
 
                         parser_context.current_brush_id = Some(brush_id.clone());
                         if parser_context.brushes.contains_key(&brush_id) {
-                            return Err(());
+                            return Err(anyhow!(
+                                "DuplicateKeyError : We cannot have twice the same brush"
+                            ));
                             // we cannot have twice the same brush id
                         } else {
                             // we init the brush with default parameters
@@ -192,10 +204,10 @@ pub fn parser<T: Read>(
 
                         // get the current brush
                         let current_brush = match parser_context.current_brush_id {
-                            None => return Err(()),
+                            None => return Err(anyhow!("Trying to set properties of the current brush but there is no current brush")),
                             Some(ref key) => match parser_context.brushes.get_mut(&key.clone()) {
                                 Some(current) => current,
-                                None => return Err(()),
+                                None => return Err(anyhow!("could not find the current brush using the current key")),
                             },
                         };
 
@@ -207,21 +219,35 @@ pub fn parser<T: Read>(
                                         // we increase the stroke width and take the max of both
 
                                         // we convert everything to mm here
-                                        let in_unit =
-                                            match get_id(&attributes, String::from("units")) {
-                                                None => return Err(()),
-                                                Some(unit_str) => {
-                                                    match ChannelUnit::parse(&Some(unit_str)) {
+                                        let in_unit = match get_id(
+                                            &attributes,
+                                            String::from("units"),
+                                        ) {
+                                            None => {
+                                                return Err(anyhow!(
+                                                    "No unit was found for the brush property {:?}",
+                                                    property_name.as_str()
+                                                ))
+                                            }
+                                            Some(unit_str) => {
+                                                match ChannelUnit::parse(&Some(unit_str.clone())) {
                                                         Some(unit) => unit,
-                                                        None => return Err(()),
+                                                        None => return Err(anyhow!("Could not find a ChannelUnit matching {:?}", unit_str)),
                                                     }
-                                                }
-                                            };
+                                            }
+                                        };
                                         let value = match get_id(&attributes, String::from("value"))
                                         {
-                                            None => return Err(()),
+                                            None => {
+                                                return Err(anyhow!(
+                                                "No value was given to set the {:?} of the brush",
+                                                property_name
+                                            ))
+                                            }
                                             Some(value_str) => {
-                                                value_str.parse::<f64>().map_err(|_| ())?
+                                                value_str.parse::<f64>().map_err(|_| {
+                                                    anyhow!("Could not parse {value_str} to f64")
+                                                })?
                                             }
                                         };
                                         let stroke_width =
@@ -234,45 +260,50 @@ pub fn parser<T: Read>(
                                             Some(color_string) => {
                                                 // format : #{:02X}{:02X}{:02X} for RGB
                                                 if color_string.len() == 7 {
-                                                    println!(
-                                                        "hello, matching color {:?}",
-                                                        color_string
-                                                    );
+                                                    println!("Matching color {:?}", color_string);
                                                     let r = u8::from_str_radix(
                                                         &color_string[1..=2],
                                                         16,
                                                     )
-                                                    .map_err(|_| ())?;
+                                                    .map_err(|_| {
+                                                        anyhow!("Failed to parse {color_string}")
+                                                    })?;
                                                     let g = u8::from_str_radix(
                                                         &color_string[3..=4],
                                                         16,
                                                     )
-                                                    .map_err(|_| ())?;
+                                                    .map_err(|_| {
+                                                        anyhow!("Failed to parse {color_string}")
+                                                    })?;
                                                     let b = u8::from_str_radix(
                                                         &color_string[5..=6],
                                                         16,
                                                     )
-                                                    .map_err(|_| ())?;
+                                                    .map_err(|_| {
+                                                        anyhow!("Failed to parse {color_string}")
+                                                    })?;
                                                     current_brush.color = (r, g, b);
                                                 } else {
-                                                    return Err(());
+                                                    return Err(anyhow!("Unexpected length for the color string, expected 7, found {}",color_string.len()));
                                                 }
                                             }
                                             None => {
-                                                return Err(());
+                                                return Err(anyhow!(
+                                                    "No color was found in the color property"
+                                                ));
                                             }
                                         }
                                     }
                                     "transparency" => {
                                         match get_id(&attributes, String::from("value")) {
-                                            None => return Err(()),
+                                            None => return Err(anyhow!("No transparency value was given in the transparency property")),
                                             Some(value_str) => {
                                                 // workaround to make it work with
                                                 // this https://devblogs.microsoft.com/microsoft365dev/onenote-ink-beta-apis/
                                                 // with transparency between 0 and 256 !!
                                                 current_brush.transparency = value_str
                                                     .parse::<u16>()
-                                                    .map_err(|_| ())?
+                                                    .map_err(|_| anyhow!("Failed to parse {value_str} to an integer"))?
                                                     .clamp(0, u8::MAX.into())
                                                     as u8;
                                             }
@@ -288,9 +319,9 @@ pub fn parser<T: Read>(
                                                 "0" | "false" => {
                                                     current_brush.ignorepressure = false;
                                                 }
-                                                _ => return Err(()),
+                                                _ => return Err(anyhow!("Unexpected value for the boolean, expected 1,0,true of false, found {bool_str}")),
                                             },
-                                            None => return Err(()),
+                                            None => return Err(anyhow!("No value was found to set the transparency")),
                                         }
                                     }
                                     _ => {
@@ -299,7 +330,11 @@ pub fn parser<T: Read>(
                                     }
                                 }
                             }
-                            None => return Err(()),
+                            None => {
+                                return Err(anyhow!(
+                                "No property was given to be changed, empty BrushProperty element"
+                            ))
+                            }
                         }
                     }
                     "trace" => {
@@ -326,7 +361,8 @@ pub fn parser<T: Read>(
                             Some(candidate_with_hash) => {
                                 let candidate = candidate_with_hash.clone().replace("#", "");
                                 if !parser_context.brushes.contains_key(&candidate) {
-                                    return Err(());
+                                    return Err(anyhow!("The trace refers to the Brush {candidate} but it was not found.
+                                                        The parser expects trace to refer to brushes that are defined before them in the inkml file"));
                                 }
                                 Some(candidate)
                             }
@@ -338,7 +374,8 @@ pub fn parser<T: Read>(
                                 match parser_context.brushes.len() {
                                     0 => None,
                                     1 => parser_context.brushes.keys().next().cloned(),
-                                    _ => return Err(()),
+                                    _ => return Err(anyhow!("Tried to give a default brush to the current trace as no reference was given,
+                                                            But this association was ambiguous (more than one brush available)")),
                                 }
                             }
                         };
@@ -346,48 +383,49 @@ pub fn parser<T: Read>(
                     _ => {}
                 }
             }
-            Ok(rXmlEvent::EndElement { name }) => match name.local_name.as_str() {
-                "definitions" => {
-                    println!("\x1b[93mclosing definitions\x1b[0m");
-                }
-                "context" => {
-                    parser_context.current_context_id = None;
-                    parser_context.start_context_element = None;
-                    println!("\x1b[93mclosing context\x1b[0m");
-                }
-                "inkSource" => {
-                    println!("\x1b[93mclosing inkSource\x1b[0m");
-                }
-                "traceFormat" => {
-                    if !matches!(
-                        parser_context.start_context_element,
-                        Some(ContextStartElement::TraceFormat)
-                    ) {
-                        parser_context.start_context_element = None;
-                        parser_context.current_context_id = None;
+            Ok(rXmlEvent::EndElement { name }) => {
+                match name.local_name.as_str() {
+                    "definitions" => {
+                        println!("\x1b[93mclosing definitions\x1b[0m");
                     }
-                    println!("\x1b[93mclosing traceFormat\x1b[0m");
-                }
-                "channelProperties" => {
-                    println!("\x1b[93mclosing channelProperties\x1b[0m");
-                    println!("now the context is {:?}", parser_context.context);
-                }
-                "trace" => {
-                    println!("\x1b[93mclosing trace\x1b[0m");
-                    parser_context.is_trace = false;
-                    parser_context.current_context_id = None;
-                    parser_context.current_brush_id = None;
-                }
-                "brush" => {
-                    println!("\x1b[93mclosing brush\x1b[0m");
+                    "context" => {
+                        parser_context.current_context_id = None;
+                        parser_context.start_context_element = None;
+                        println!("\x1b[93mclosing context\x1b[0m");
+                    }
+                    "inkSource" => {
+                        println!("\x1b[93mclosing inkSource\x1b[0m");
+                    }
+                    "traceFormat" => {
+                        if !matches!(
+                            parser_context.start_context_element,
+                            Some(ContextStartElement::TraceFormat)
+                        ) {
+                            parser_context.start_context_element = None;
+                            parser_context.current_context_id = None;
+                        }
+                        println!("\x1b[93mclosing traceFormat\x1b[0m");
+                    }
+                    "channelProperties" => {
+                        println!("\x1b[93mclosing channelProperties\x1b[0m");
+                        println!("now the context is {:?}", parser_context.context);
+                    }
+                    "trace" => {
+                        println!("\x1b[93mclosing trace\x1b[0m");
+                        parser_context.is_trace = false;
+                        parser_context.current_context_id = None;
+                        parser_context.current_brush_id = None;
+                    }
+                    "brush" => {
+                        println!("\x1b[93mclosing brush\x1b[0m");
 
-                    // if no stroke width was given, give a min default value
-                    match parser_context.current_brush_id {
-                        None => return Err(()),
+                        // if no stroke width was given, give a min default value
+                        match parser_context.current_brush_id {
+                        None => return Err(anyhow!("Closing element for a brush but it was never opened, malformed file")),
                         Some(current_key) => {
                             let current_brush = match parser_context.brushes.get_mut(&current_key) {
                                 Some(brush) => brush,
-                                None => return Err(()),
+                                None => return Err(anyhow!("Cannot find the brush with its (supposedly) key in the dictionnary")),
                             };
                             if current_brush.stroke_width == 0.0 {
                                 current_brush.stroke_width = 0.1;
@@ -395,10 +433,11 @@ pub fn parser<T: Read>(
                         }
                     }
 
-                    parser_context.current_brush_id = None;
+                        parser_context.current_brush_id = None;
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             Ok(rXmlEvent::Characters(string_out)) => {
                 // we have to verify we are inside a trace
                 if parser_context.is_trace {
@@ -410,9 +449,17 @@ pub fn parser<T: Read>(
                                 .iter()
                                 .map(|x| x.types.clone())
                                 .collect::<Vec<ChannelType>>(),
-                            None => return Err(()),
+                            None => {
+                                return Err(anyhow!(
+                                "Trace data was started but couldn't find its associated context"
+                            ))
+                            }
                         },
-                        None => return Err(()),
+                        None => {
+                            return Err(anyhow!(
+                            "Text data is only expected inside of a trace but no trace was opened"
+                        ))
+                        }
                     };
 
                     println!("start of trace char");
@@ -446,16 +493,16 @@ pub fn parser<T: Read>(
                     parser_context.current_context_id = None;
                 }
             }
-            Err(_) => return Err(()),
+            Err(e) => return Err(anyhow!("Failed to parse xml element : {e}")),
             _ => {}
         }
     }
 
-    Ok((
-        trace_collect,
-        parser_context.context,
-        parser_context.brushes,
-    ))
+    Ok(ParserResult {
+        context_brush_data_vec: trace_collect,
+        context_dict: parser_context.context,
+        context_brush: parser_context.brushes,
+    })
 }
 
 /// This function formats the output of the parser
@@ -463,14 +510,23 @@ pub fn parser<T: Read>(
 /// We return an iterator over strokes where the X,Y and F
 /// channels are returned as floats with X and Y being in cm unit
 /// and F between 0 and 1 (and 1.0 if F is missing), with the associated brush
-pub fn parse_formatted<T: Read>(buf_file: T) -> Result<Vec<(FormattedStroke, Brush)>, ()> {
+pub fn parse_formatted<T: Read>(buf_file: T) -> anyhow::Result<Vec<(FormattedStroke, Brush)>> {
     let mut formatted_result: Vec<(FormattedStroke, Brush)> = vec![];
-    let (strokes, context_dict, brushes_dict) = parser(buf_file)?;
+    let ParserResult {
+        context_brush_data_vec: strokes,
+        context_dict,
+        context_brush: brushes_dict,
+    } = parser(buf_file)?;
 
     // iterate over results
     for (context_str, brush_str, stroke) in strokes {
-        let context = context_dict.get(&context_str).ok_or_else(|| ())?;
-        let brush = brushes_dict.get(&brush_str).ok_or_else(|| ())?.clone();
+        let context = context_dict
+            .get(&context_str)
+            .ok_or_else(|| anyhow!("Could not find the context"))?;
+        let brush = brushes_dict
+            .get(&brush_str)
+            .ok_or_else(|| anyhow!("Could not find the brush"))?
+            .clone();
 
         // verify X, Y exist
         let (x_idx, y_idx) = (

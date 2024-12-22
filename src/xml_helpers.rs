@@ -1,6 +1,6 @@
 use xml::attribute::OwnedAttribute;
 
-pub(crate) fn get_id(attributes: &Vec<OwnedAttribute>, match_string: String) -> Option<String> {
+pub(crate) fn get_id(attributes: &[OwnedAttribute], match_string: String) -> Option<String> {
     attributes
         .iter()
         .filter(|x| x.name.local_name == match_string)
@@ -26,7 +26,7 @@ pub(crate) fn get_ids(
         .collect()
 }
 
-pub(crate) fn verify_channel_properties(ids: &Vec<Option<String>>) -> bool {
+pub(crate) fn verify_channel_properties(ids: &[Option<String>]) -> bool {
     if ids.iter().all(|new| new.is_some()) {
         // we have verified all of the information is there
         // according to the spec, channel name and value are required

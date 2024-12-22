@@ -4,6 +4,7 @@
 
 use crate::trace_data::ChannelDataEl;
 use crate::traits::Writable;
+use anyhow::anyhow;
 use std::io::Write;
 use xml::writer::{Error, EventWriter, XmlEvent};
 
@@ -28,7 +29,7 @@ pub enum ChannelKind {
 }
 
 impl ChannelKind {
-    pub(crate) fn parse(name: &Option<String>) -> Result<ChannelKind, ()> {
+    pub(crate) fn parse(name: &Option<String>) -> anyhow::Result<ChannelKind> {
         match name {
             Some(value) => match value.as_str() {
                 "X" => Ok(ChannelKind::X),
@@ -38,9 +39,9 @@ impl ChannelKind {
                 "OE" => Ok(ChannelKind::OE),
                 "OTx" => Ok(ChannelKind::OTx),
                 "OTy" => Ok(ChannelKind::OTy),
-                _ => Err(()),
+                _ => Err(anyhow!("the channel kind {:?} was not found. It is either not implemented or incorrect", value)),
             },
-            None => Err(()),
+            None => Err(anyhow!("an empty string was given")),
         }
     }
 
@@ -92,16 +93,16 @@ pub enum ChannelType {
 }
 
 impl ChannelType {
-    pub(crate) fn parse(name: &Option<String>) -> Result<ChannelType, ()> {
+    pub(crate) fn parse(name: &Option<String>) -> anyhow::Result<ChannelType> {
         match name {
             Some(value) => match value.as_str() {
                 "integer" => Ok(ChannelType::Integer),
                 "decimal" => Ok(ChannelType::Decimal),
                 "double" => Ok(ChannelType::Double),
                 "boolean" => Ok(ChannelType::Bool),
-                _ => Err(()),
+                _ => Err(anyhow!("the channel type {value} is not part of the types accepted : integer, decimal, double or boolean")),
             },
-            None => Err(()),
+            None => Err(anyhow!("ChannelType:parse was given a None")),
         }
     }
 
@@ -113,11 +114,11 @@ impl ChannelType {
                 match self {
                     ChannelType::Integer => max_parsed_str
                         .parse::<i64>()
-                        .map(|val| ChannelDataEl::Integer(val))
+                        .map(ChannelDataEl::Integer)
                         .ok(),
                     ChannelType::Double | ChannelType::Decimal => max_parsed_str
                         .parse::<f64>()
-                        .map(|val| ChannelDataEl::Double(val))
+                        .map(ChannelDataEl::Double)
                         .ok(),
                     _ => None,
                 }
@@ -178,7 +179,7 @@ impl From<ResolutionUnits> for String {
 }
 
 impl ResolutionUnits {
-    pub fn parse(name: &Option<String>) -> Result<ResolutionUnits, ()> {
+    pub fn parse(name: &Option<String>) -> anyhow::Result<ResolutionUnits> {
         match name {
             Some(value) => match value.as_str() {
                 "1/cm" => Ok(ResolutionUnits::OneOverCm),
@@ -186,9 +187,13 @@ impl ResolutionUnits {
                 "1/dev" => Ok(ResolutionUnits::OneOverDev),
                 "1/deg" => Ok(ResolutionUnits::OneOverDegree),
                 "1/himetric" => Ok(ResolutionUnits::OneOverHimetric),
-                _ => Err(()),
+                _ => Err(
+                    anyhow!("Could not find a `ResolutionUnits` matching {value}. 
+                            It either is incorrect of this unit is not implemented 
+                            (1/cm, 1/mm, 1/dev, 1/deg, and 1/himetric are the ones currently implemented)"),
+                ),
             },
-            None => Err(()),
+            None => Err(anyhow!("ResolutionUnits::parse was given a None, aborting")),
         }
     }
 }
@@ -242,7 +247,11 @@ impl ChannelUnit {
         }
     }
 
-    pub(crate) fn convert_to(&self, output_unit: ChannelUnit, input_value: f64) -> Result<f64, ()> {
+    pub(crate) fn convert_to(
+        &self,
+        output_unit: ChannelUnit,
+        input_value: f64,
+    ) -> anyhow::Result<f64> {
         // pretty horrible, better to use a table/matrix with conversion values ?
         match (self, output_unit) {
             (ChannelUnit::mm, ChannelUnit::mm) => Ok(input_value),
@@ -259,7 +268,12 @@ impl ChannelUnit {
             (ChannelUnit::himetric, ChannelUnit::cm) => Ok(input_value * 1e-3),
             (ChannelUnit::himetric, ChannelUnit::mm) => Ok(input_value * 1e-2),
             (ChannelUnit::himetric, ChannelUnit::m) => Ok(input_value * 1e-5),
-            _ => Err(()),
+            (input, output) => Err(anyhow!(
+                "Could not convert from {:?} to {:?}. Is the conversion valid ? 
+                (For example, converting deg to meters, or dev to another unit)",
+                input,
+                output
+            )),
         }
     }
 }
@@ -277,7 +291,7 @@ pub struct Channel {
 impl Channel {
     pub fn initialise_channel_from_name(
         kind_type_unit_v: Vec<Option<String>>,
-    ) -> Result<Channel, ()> {
+    ) -> anyhow::Result<Channel> {
         let channel_type = &kind_type_unit_v[1];
         let unit = &kind_type_unit_v[2];
 

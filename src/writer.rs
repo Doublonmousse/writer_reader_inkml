@@ -20,8 +20,7 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> anyhow::Result<Vec<
         .create_writer(&mut out_v);
 
     // xmls : InkML
-    writer
-        .write(XmlEvent::start_element("ink").default_ns("http://www.w3.org/2003/InkML"))?;
+    writer.write(XmlEvent::start_element("ink").default_ns("http://www.w3.org/2003/InkML"))?;
 
     // definitions block
     // contains :
@@ -31,8 +30,7 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> anyhow::Result<Vec<
     //  - more properties, resolution and units (if integer encoded, what's 1 in cm !)
     // brush list
     // - width, height, color, ignorePressure
-    writer
-        .write(XmlEvent::start_element("definitions"))?;
+    writer.write(XmlEvent::start_element("definitions"))?;
 
     let context = Context::default_with_pressure();
     context.write(&mut writer)?;
@@ -51,12 +49,11 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> anyhow::Result<Vec<
     for ((formatted_stroke, _), brush_id) in stroke_data.into_iter().zip(brush_collection.mapping())
     {
         // we are using the NEW brush id here
-        writer
-            .write(
-                XmlEvent::start_element("trace")
-                    .attr("contextRef", format!("#{}", context.name).as_str())
-                    .attr("brushRef", format!("#{}", brush_id).as_str()),
-            )?;
+        writer.write(
+            XmlEvent::start_element("trace")
+                .attr("contextRef", format!("#{}", context.name).as_str())
+                .attr("brushRef", format!("#{}", brush_id).as_str()),
+        )?;
 
         formatted_stroke.write(&mut writer)?;
     }

@@ -22,9 +22,9 @@ pub struct Brush {
 }
 
 impl Brush {
-    pub(crate) fn init_brush_with_id(id: &String) -> Brush {
+    pub(crate) fn init_brush_with_id(id: &str) -> Brush {
         Brush {
-            name: id.clone(),
+            name: id.to_owned(),
             color: (0, 0, 0),
             stroke_width: 0.0,
             transparency: 0,
@@ -125,9 +125,9 @@ impl Brush {
         Brush {
             name,
             color,
-            stroke_width: stroke_width,
-            transparency: transparency,
-            ignorepressure: ignorepressure,
+            stroke_width,
+            transparency,
+            ignorepressure,
         }
     }
 }
@@ -141,14 +141,14 @@ impl Writable for Brush {
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "width")
-                .attr("value", &format!("{}", self.stroke_width*10.0))
+                .attr("value", &format!("{}", self.stroke_width * 10.0))
                 .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "height")
-                .attr("value", &format!("{}", self.stroke_width*10.0))
+                .attr("value", &format!("{}", self.stroke_width * 10.0))
                 .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;
