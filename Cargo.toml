@@ -7,6 +7,9 @@ edition = "2021"
 xml = "0.8.20"
 clipboard-rs = {version = "0.2.1", optional=true}
 anyhow = "1.0.95"
+tracing = "0.1.41"
+tracing-subscriber = {version = "0.3.19", optional=true}
 
 [features]
 clipboard = ["dep:clipboard-rs"]
+tracer = ["dep:tracing-subscriber"]

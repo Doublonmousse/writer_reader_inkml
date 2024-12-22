@@ -6,6 +6,7 @@
 
 use crate::{context::ChannelType, traits::Writable};
 use anyhow::anyhow;
+use tracing::trace;
 use xml::writer::XmlEvent;
 
 /// polymorphic enum to hold the data from a trace before a resolution conversion
@@ -250,7 +251,7 @@ impl TraceData {
                 }
             }
 
-            //println!("verifying what's left is only spaces");
+            trace!("verifying what's left is only spaces");
 
             // verify that the end of the line is all spaces
             // check that we have not more ignored data further down
@@ -265,22 +266,21 @@ impl TraceData {
                     }
                 }
             }
-            // println!("ok, this was only spaces");
+            trace!("ok, this was only spaces");
         }
 
         for i in 0..self.data.len() {
-            println!("{:?}", self.data[i]);
+            trace!("{:?}", self.data[i]);
         }
         Ok(())
     }
 
     fn push_found_value(&mut self) -> anyhow::Result<()> {
         // parse the value
-        // debug trace
-        // println!(
-        //     "End val, Value up till now {:?}, modifier {:?}, index : {:?}",
-        //     self.value_str, self.new_modifier, self.index_channel
-        // );
+        trace!(
+            "End val, Value up till now {:?}, modifier {:?}, index : {:?}",
+            self.value_str, self.new_modifier, self.index_channel
+        );
 
         // push to the corresponding channel
         match &mut self
@@ -290,10 +290,10 @@ impl TraceData {
         {
             ChannelData::Integer(current) => {
                 let parsed_value = self.value_str.parse::<i64>();
-                // println!(
-                //     "parsed value : {:?} value str {:?}",
-                //     parsed_value, self.value_str
-                // );
+                trace!(
+                    "parsed value : {:?} value str {:?}",
+                    parsed_value, self.value_str
+                );
                 match parsed_value {
                     Ok(value) => match self.new_modifier {
                         ValueModifier::Explicit => {
@@ -346,10 +346,10 @@ impl TraceData {
             ChannelData::Double(current) => {
                 let parsed_value: Result<f64, std::num::ParseFloatError> =
                     self.value_str.parse::<f64>();
-                // println!(
-                //     "parsed value : {:?} value str {:?}",
-                //     parsed_value, self.value_str
-                // );
+                trace!(
+                 "parsed value : {:?} value str {:?}",
+                    parsed_value, self.value_str
+                );
                 match parsed_value {
                     Ok(value) => match self.new_modifier {
                         ValueModifier::Explicit => {
@@ -404,16 +404,16 @@ impl TraceData {
                 }
             }
             ChannelData::Bool(current) => {
-                println!("value : {:?}", self.value_str);
+                trace!("value : {:?}", self.value_str);
                 let parsed_value = match self.value_str.as_str() {
                     "T" => Ok(true),
                     "F" => Ok(false),
                     _ => Err(()),
                 };
-                // println!(
-                //     "parsed value : {:?} value str {:?}",
-                //     parsed_value, self.value_str
-                // );
+                trace!(
+                    "parsed value : {:?} value str {:?}",
+                    parsed_value, self.value_str
+                );
 
                 // boolean : will be true or false, not changing anything there
                 // so effectively the corresponding index in the last_value_difference

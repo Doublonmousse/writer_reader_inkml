@@ -8,6 +8,7 @@ use crate::context::{Channel, ChannelKind, ChannelType, ChannelUnit, Context, Re
 use crate::trace_data::FormattedStroke;
 use crate::trace_data::{ChannelData, TraceData};
 use crate::xml_helpers::{get_id, get_ids, verify_channel_properties};
+use tracing::{debug,trace};
 
 #[derive(Debug)]
 enum ContextStartElement {
@@ -64,7 +65,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                     "context" => {
                         let id_context =
                             get_id(&attributes, String::from("id")).unwrap_or(String::from("ctx0"));
-                        println!("context id :{:?}", id_context);
+                        debug!("context id :{:?}", id_context);
 
                         // create the empty context
                         if !parser_context.context.contains_key(&id_context) {
@@ -81,12 +82,12 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                     }
                     "inkSource" => {
                         let id_source = get_id(&attributes, String::from("id"));
-                        println!("source id :{:?}", id_source);
+                        debug!("source id :{:?}", id_source);
                         // useful to start/end the parsing of a source (full context !)
                         // though there are cases where only the trace format can exist
                     }
                     "traceFormat" => {
-                        println!("start of traceFormat");
+                        debug!("start of traceFormat");
                         // if we have no inkSource, this should init our context as well with a default inkSource id here
                         if parser_context.context.is_empty() {
                             // create a new context with a default name
@@ -98,7 +99,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                             parser_context.start_context_element =
                                 Some(ContextStartElement::TraceFormat);
                         }
-                        println!("here is the current context: {:?}", parser_context.context);
+                        debug!("here is the current context: {:?}", parser_context.context);
                     }
                     "channel" => {
                         let ids = get_ids(
@@ -111,7 +112,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                             ],
                         );
                         // add the channels to the CURRENT context
-                        println!("{:?}", ids);
+                        debug!("{:?}", ids);
                         if let Some(ref current_context) = parser_context.current_context_id {
                             parser_context
                                 .context
@@ -122,7 +123,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                         }
                     }
                     "channelProperties" => {
-                        println!("start of channel properties");
+                        debug!("start of channel properties");
                     }
                     "channelProperty" => {
                         // inside of a context, the channelProperty gives additional info on the scaling of elements
@@ -135,7 +136,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                                 String::from("units"),
                             ],
                         );
-                        println!("{:?}", ids);
+                        debug!("{:?}", ids);
 
                         if verify_channel_properties(&ids)
                             && parser_context.current_context_id.is_some()
@@ -182,7 +183,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                         // if not fallback on a default value
                         let brush_id =
                             get_id(&attributes, String::from("id")).unwrap_or(String::from("br0"));
-                        println!("brush id {:?}", brush_id);
+                        debug!("brush id {:?}", brush_id);
 
                         parser_context.current_brush_id = Some(brush_id.clone());
                         if parser_context.brushes.contains_key(&brush_id) {
@@ -260,7 +261,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                                             Some(color_string) => {
                                                 // format : #{:02X}{:02X}{:02X} for RGB
                                                 if color_string.len() == 7 {
-                                                    println!("Matching color {:?}", color_string);
+                                                    debug!("Matching color {:?}", color_string);
                                                     let r = u8::from_str_radix(
                                                         &color_string[1..=2],
                                                         16,
@@ -326,7 +327,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                                     }
                                     _ => {
                                         // ignore
-                                        println!("brush property ignored: {:?}", property_name);
+                                        debug!("brush property ignored: {:?}", property_name);
                                     }
                                 }
                             }
@@ -338,7 +339,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                         }
                     }
                     "trace" => {
-                        println!("start of trace");
+                        trace!("start of trace");
                         parser_context.is_trace = true;
                         // need to assign a context and a brush
                         // this will give the information on the type (int or float) of each channel
@@ -386,15 +387,15 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
             Ok(rXmlEvent::EndElement { name }) => {
                 match name.local_name.as_str() {
                     "definitions" => {
-                        println!("\x1b[93mclosing definitions\x1b[0m");
+                        debug!("\x1b[93mclosing definitions\x1b[0m");
                     }
                     "context" => {
                         parser_context.current_context_id = None;
                         parser_context.start_context_element = None;
-                        println!("\x1b[93mclosing context\x1b[0m");
+                        debug!("\x1b[93mclosing context\x1b[0m");
                     }
                     "inkSource" => {
-                        println!("\x1b[93mclosing inkSource\x1b[0m");
+                        debug!("\x1b[93mclosing inkSource\x1b[0m");
                     }
                     "traceFormat" => {
                         if !matches!(
@@ -404,20 +405,20 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                             parser_context.start_context_element = None;
                             parser_context.current_context_id = None;
                         }
-                        println!("\x1b[93mclosing traceFormat\x1b[0m");
+                        trace!("\x1b[93mclosing traceFormat\x1b[0m");
                     }
                     "channelProperties" => {
-                        println!("\x1b[93mclosing channelProperties\x1b[0m");
-                        println!("now the context is {:?}", parser_context.context);
+                        debug!("\x1b[93mclosing channelProperties\x1b[0m");
+                        debug!("now the context is {:?}", parser_context.context);
                     }
                     "trace" => {
-                        println!("\x1b[93mclosing trace\x1b[0m");
+                        trace!("\x1b[93mclosing trace\x1b[0m");
                         parser_context.is_trace = false;
                         parser_context.current_context_id = None;
                         parser_context.current_brush_id = None;
                     }
                     "brush" => {
-                        println!("\x1b[93mclosing brush\x1b[0m");
+                        debug!("\x1b[93mclosing brush\x1b[0m");
 
                         // if no stroke width was given, give a min default value
                         match parser_context.current_brush_id {
@@ -462,7 +463,7 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                         }
                     };
 
-                    println!("start of trace char");
+                    trace!("start of trace char");
 
                     // init the trace data parser
                     let mut trace_data = TraceData::from_channel_types(ch_type_vec);
