@@ -58,6 +58,13 @@ impl Hash for PositiveFiniteFloat {
     }
 }
 
+/// Type alias that's used to check brush duplicates using a hashmap
+/// - The first element is the (r,g,b) value
+/// - The second element is the stroke width
+/// - The third is whether or not pressure is ignored
+/// - The last one is transparency
+type BrushIndex = ((u8, u8, u8), PositiveFiniteFloat, bool, u8);
+
 /// We iterate over the strokes and construct a collection of brushes
 /// so that we have the lowest number of brushes used
 ///
@@ -70,7 +77,7 @@ pub(crate) struct BrushCollection {
     brushes: HashMap<String, Brush>,
     /// Called with color, stroke width, ignorepressure and transparency, gives
     /// the id corresponding to this value
-    duplicate_search: HashMap<((u8, u8, u8), PositiveFiniteFloat, bool, u8), String>,
+    duplicate_search: HashMap<BrushIndex, String>,
     /// Memorizes the brush id given for each call wanting to add a brush
     mapping: Vec<String>,
 }
