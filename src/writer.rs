@@ -4,10 +4,9 @@ use crate::traits::Writable;
 use crate::{brushes::Brush, trace_data::FormattedStroke};
 #[cfg(feature = "clipboard")]
 use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
-use std::io;
 use xml::writer::{EmitterConfig, XmlEvent};
 
-pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>> {
+pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> anyhow::Result<Vec<u8>> {
     // create brushes
     let mut brush_collection = BrushCollection::default();
     for (_, brush) in &stroke_data {
@@ -22,8 +21,7 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>>
 
     // xmls : InkML
     writer
-        .write(XmlEvent::start_element("ink").default_ns("http://www.w3.org/2003/InkML"))
-        .unwrap();
+        .write(XmlEvent::start_element("ink").default_ns("http://www.w3.org/2003/InkML"))?;
 
     // definitions block
     // contains :
@@ -34,17 +32,16 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>>
     // brush list
     // - width, height, color, ignorePressure
     writer
-        .write(XmlEvent::start_element("definitions"))
-        .unwrap();
+        .write(XmlEvent::start_element("definitions"))?;
 
     let context = Context::default_with_pressure();
-    context.write(&mut writer).unwrap();
+    context.write(&mut writer)?;
 
     // write all brushes
     for (_, brush) in brush_collection.brushes() {
-        brush.write(&mut writer).unwrap();
+        brush.write(&mut writer)?;
     }
-    writer.write(XmlEvent::end_element()).unwrap(); // end definitions
+    writer.write(XmlEvent::end_element())?; // end definitions
 
     // iterate over strokes
     //add trace element with some contextRef and brushRef
@@ -59,13 +56,12 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>>
                 XmlEvent::start_element("trace")
                     .attr("contextRef", format!("#{}", context.name).as_str())
                     .attr("brushRef", format!("#{}", brush_id).as_str()),
-            )
-            .unwrap();
+            )?;
 
-        formatted_stroke.write(&mut writer).unwrap();
+        formatted_stroke.write(&mut writer)?;
     }
 
-    writer.write(XmlEvent::end_element()).unwrap(); // end ink
+    writer.write(XmlEvent::end_element())?; // end ink
 
     // copy to clipboard (for testing purposes only)
     #[cfg(feature = "clipboard")]
@@ -73,7 +69,7 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> io::Result<Vec<u8>>
         let mimetype = String::from("InkML Format");
         let content: Vec<ClipboardContent> =
             vec![ClipboardContent::Other(mimetype, out_v.to_owned())];
-        let ctx = ClipboardContext::new().unwrap();
+        let ctx = ClipboardContext::new()?;
         let _ = ctx.set(content);
     }
     Ok(out_v)
