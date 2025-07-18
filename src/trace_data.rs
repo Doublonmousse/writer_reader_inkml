@@ -86,8 +86,8 @@ impl Writable for FormattedStroke {
                 .zip(&self.y)
                 .zip(&self.f)
                 .fold(String::from(""), |acc, ((x, y), f)| {
-                    let x_int = (x * 1000.0) as u64;
-                    let y_int = (y * 1000.0) as u64;
+                    let x_int = (x * 1000.0) as i64;
+                    let y_int = (y * 1000.0) as i64;
                     let f_int = (f * 32767.0) as u64;
 
                     acc + &format!("{x_int} {y_int} {f_int},")
