@@ -15,8 +15,8 @@ pub struct Brush {
     pub color: (u8, u8, u8),
     // simplified version, the stroke width is
     // given as a positive float corresponding to the width in
-    // mm
-    pub stroke_width: f64,
+    // cm
+    pub stroke_width_cm: f64,
     pub ignorepressure: bool,
     pub transparency: u8,
 }
@@ -26,7 +26,7 @@ impl Brush {
         Brush {
             name: id.to_owned(),
             color: (0, 0, 0),
-            stroke_width: 0.0,
+            stroke_width_cm: 0.0,
             transparency: 0,
             ignorepressure: false,
         }
@@ -86,7 +86,7 @@ impl BrushCollection {
     pub(crate) fn add_brush(&mut self, brush: &Brush) {
         let duplicate_key = (
             brush.color,
-            PositiveFiniteFloat::new(brush.stroke_width),
+            PositiveFiniteFloat::new(brush.stroke_width_cm),
             brush.ignorepressure,
             brush.transparency,
         );
@@ -132,7 +132,7 @@ impl Brush {
         Brush {
             name,
             color,
-            stroke_width,
+            stroke_width_cm: stroke_width,
             transparency,
             ignorepressure,
         }
@@ -148,14 +148,14 @@ impl Writable for Brush {
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "width")
-                .attr("value", &format!("{}", self.stroke_width * 10.0))
+                .attr("value", &format!("{}", self.stroke_width_cm))
                 .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;
         writer.write(
             XmlEvent::start_element("brushProperty")
                 .attr("name", "height")
-                .attr("value", &format!("{}", self.stroke_width * 10.0))
+                .attr("value", &format!("{}", self.stroke_width_cm))
                 .attr("units", "cm"),
         )?;
         writer.write(XmlEvent::end_element())?;

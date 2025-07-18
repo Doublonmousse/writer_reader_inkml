@@ -252,9 +252,9 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                                             }
                                         };
                                         let stroke_width =
-                                            in_unit.convert_to(ChannelUnit::mm, value)?;
-                                        current_brush.stroke_width =
-                                            current_brush.stroke_width.max(stroke_width);
+                                            in_unit.convert_to(ChannelUnit::cm, value)?;
+                                        current_brush.stroke_width_cm =
+                                            current_brush.stroke_width_cm.max(stroke_width);
                                     }
                                     "color" => {
                                         match get_id(&attributes, String::from("value")) {
@@ -428,8 +428,8 @@ pub fn parser<T: Read>(buf_file: T) -> anyhow::Result<ParserResult> {
                                 Some(brush) => brush,
                                 None => return Err(anyhow!("Cannot find the brush with its (supposedly) key in the dictionnary")),
                             };
-                            if current_brush.stroke_width == 0.0 {
-                                current_brush.stroke_width = 0.1;
+                            if current_brush.stroke_width_cm == 0.0 {
+                                current_brush.stroke_width_cm = 0.1;
                             }
                         }
                     }
