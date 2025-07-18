@@ -63,10 +63,10 @@ pub fn writer(stroke_data: Vec<(FormattedStroke, Brush)>) -> anyhow::Result<Vec<
     // copy to clipboard (for testing purposes only)
     #[cfg(feature = "clipboard")]
     {
-        let mimetype = String::from("InkML Format");
+        let mimetype_windows = String::from("InkML Format");
         let content: Vec<ClipboardContent> =
-            vec![ClipboardContent::Other(mimetype, out_v.to_owned())];
-        let ctx = ClipboardContext::new()?;
+            vec![ClipboardContent::Other(mimetype_windows, out_v.to_owned())];
+        let ctx = ClipboardContext::new().unwrap();
         let _ = ctx.set(content);
     }
     Ok(out_v)
